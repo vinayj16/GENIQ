@@ -1,27 +1,59 @@
-const express = require('express');
-const cors = require('cors');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const rateLimit = require('express-rate-limit');
-require('dotenv').config();
+import express from 'express';
+import cors from 'cors';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import rateLimit from 'express-rate-limit';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import helmet from 'helmet';
+import compression from 'compression';
+import dotenv from 'dotenv';
+
+// ES Modules fix for __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load environment variables
+dotenv.config({
+  path: process.env.NODE_ENV === 'production' 
+    ? path.join(__dirname, '../.env.production')
+    : '.env'
+});
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Trust proxy for production
+if (isProduction) {
+  app.set('trust proxy', 1);
+}
+
+// Security middleware
+app.use(helmet());
+app.use(compression());
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
+  max: parseInt(process.env.RATE_LIMIT_MAX) || 100, // limit each IP to 100 requests per windowMs
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for health checks
+    return req.path === '/health';
+  }
 });
 
 // CORS configuration to allow requests from the frontend's origin
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: process.env.NODE_ENV === 'production' 
+    ? [process.env.FRONTEND_URL, 'https://geniq.onrender.com']
+    : 'http://localhost:5173',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'X-API-Key', 'Authorization'],
-  credentials: true
+  credentials: true,
+  optionsSuccessStatus: 200 // For legacy browser support
 };
 
 app.use(cors(corsOptions));
@@ -46,13 +78,34 @@ const apiKeyAuth = (req, res, next) => {
   }
 };
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // Error handling middleware
 const errorHandler = (err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(500).json({ 
-    error: 'Internal server error',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+  console.error('Error:', {
+    message: err.message,
+    stack: isProduction ? undefined : err.stack,
+    path: req.path,
+    method: req.method,
+    timestamp: new Date().toISOString()
   });
+  
+  const statusCode = err.statusCode || 500;
+  const response = {
+    error: statusCode === 500 ? 'Internal Server Error' : err.message,
+    status: 'error',
+    statusCode
+  };
+
+  // Include stack trace in development
+  if (!isProduction) {
+    response.stack = err.stack;
+  }
+
+  res.status(statusCode).json(response);
 };
 
 // Sample reviews data
@@ -930,7 +983,8 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: 'Endpoint not found' });
 });
 
-app.listen(PORT, () => {
+// Export the Express app for testing and production
+const server = app.listen(PORT, () => {
   const key = process.env.VITE_API_KEY;
   const aiKey = process.env.GOOGLE_AI_API_KEY;
   
