@@ -1,0 +1,40 @@
+<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="faviconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3B82F6" />
+      <stop offset="50%" stop-color="#6366F1" />
+      <stop offset="100%" stop-color="#8B5CF6" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Main circle background -->
+  <circle cx="20" cy="20" r="18" fill="url(#faviconGradient)" />
+  
+  <!-- Inner design - representing intelligence/brain/connections -->
+  <g fill="white" fill-opacity="0.9">
+    <!-- Central node -->
+    <circle cx="20" cy="20" r="3" />
+    
+    <!-- Connection lines -->
+    <path d="M20 17 L15 12" stroke="white" stroke-width="2" stroke-linecap="round" />
+    <path d="M20 17 L25 12" stroke="white" stroke-width="2" stroke-linecap="round" />
+    <path d="M20 23 L15 28" stroke="white" stroke-width="2" stroke-linecap="round" />
+    <path d="M20 23 L25 28" stroke="white" stroke-width="2" stroke-linecap="round" />
+    <path d="M17 20 L8 20" stroke="white" stroke-width="2" stroke-linecap="round" />
+    <path d="M23 20 L32 20" stroke="white" stroke-width="2" stroke-linecap="round" />
+    
+    <!-- Outer nodes -->
+    <circle cx="15" cy="12" r="2" />
+    <circle cx="25" cy="12" r="2" />
+    <circle cx="15" cy="28" r="2" />
+    <circle cx="25" cy="28" r="2" />
+    <circle cx="8" cy="20" r="2" />
+    <circle cx="32" cy="20" r="2" />
+    
+    <!-- Small accent dots -->
+    <circle cx="12" cy="15" r="1" fill-opacity="0.6" />
+    <circle cx="28" cy="15" r="1" fill-opacity="0.6" />
+    <circle cx="12" cy="25" r="1" fill-opacity="0.6" />
+    <circle cx="28" cy="25" r="1" fill-opacity="0.6" />
+  </g>
+</svg>
