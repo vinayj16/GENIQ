@@ -51,9 +51,9 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       assetsDir: 'assets',
-      sourcemap: !isProduction,
-      minify: isProduction ? 'terser' : false,
-      target: 'es2015',
+      sourcemap: false,
+      minify: 'esbuild',
+      target: 'esnext',
       chunkSizeWarningLimit: 1000,
       rollupOptions: {
         output: {
