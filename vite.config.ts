@@ -14,8 +14,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const isProduction = mode === 'production';
   
-  // Create Vite config object
-  const config: UserConfig = {
+  return {
     plugins: [react()],
     define: {
       'process.env': {}
@@ -29,22 +28,23 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       proxy: {
         '/api': {
-          target: process.env.NODE_ENV === 'production' 
-        ? 'https://geniq-mtkc.onrender.com' 
-        : 'http://localhost:5000',
-      changeOrigin: true,
-      secure: false,
+          target: isProduction 
+            ? 'https://geniq-mtkc.onrender.com' 
+            : 'http://localhost:10000',
+          changeOrigin: true,
+          secure: false,
           configure: (proxy) => {
             proxy.on('error', (err: Error) => {
-              // eslint-disable-next-line no-console
               console.error('Proxy error:', err);
             });
-            proxy.on('proxyReq', (proxyReq, req) => {
-              // eslint-disable-next-line no-console
-              console.log('Proxying request:', req.method, req.url);
+            proxy.on('proxyReq', (proxyReq) => {
+              console.log('Sending request to:', proxyReq.path);
+            });
+            proxy.on('proxyRes', (proxyRes) => {
+              console.log('Received response with status:', proxyRes.statusCode);
             });
           },
-          rewrite: (path: string) => path.replace(/^\/api/, '')
+          pathRewrite: (path: string): string => path.replace(/^\/api/, '')
         }
       }
     },
@@ -52,20 +52,35 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       assetsDir: 'assets',
       sourcemap: false,
-      minify: 'esbuild',
+      minify: isProduction ? 'esbuild' : false,
       target: 'esnext',
-      chunkSizeWarningLimit: 1000,
+      chunkSizeWarningLimit: 1600,
       rollupOptions: {
         output: {
-          manualChunks: undefined // Disable manual chunking to avoid build issues
+          manualChunks: undefined
         }
-      }
+      },
+      // Ensure proper asset paths in production
+      assetsInlineLimit: 4096,
+      cssCodeSplit: true
     },
+    // Base URL for production
+    base: isProduction ? '/' : '/',
+    // Clear the screen on dev server start
+    clearScreen: true,
+    // Log level
+    logLevel: isProduction ? 'warn' : 'info',
+    // Environment variables
+    envDir: '.',
+    envPrefix: ['VITE_', 'PUBLIC_'],
+    // Optimize deps for production
+    optimizeDeps: {
+      include: ['react', 'react-dom', 'react-router-dom']
+    },
+    // Preview server config
     preview: {
-      port: 5173,
-      strictPort: true,
-    },
+      port: 4173,
+      open: !process.env.CI
+    }
   };
-
-  return config;
 });

@@ -3,6 +3,7 @@ import cors from 'cors';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -72,7 +73,22 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 if (isProduction) {
   const buildPath = path.join(__dirname, '../dist');
   console.log(`📁 Serving static files from: ${buildPath}`);
-  app.use(express.static(buildPath));
+  
+  // Check if dist folder exists
+  if (!fs.existsSync(buildPath)) {
+    console.error(`❌ Build directory not found: ${buildPath}`);
+  } else {
+    console.log(`✅ Build directory found: ${buildPath}`);
+    const files = fs.readdirSync(buildPath);
+    console.log(`📄 Build contains: ${files.join(', ')}`);
+  }
+  
+  // Serve static files with proper headers
+  app.use(express.static(buildPath, {
+    maxAge: '1d',
+    etag: true,
+    lastModified: true
+  }));
 }
 
 // Request logging middleware
@@ -1000,12 +1016,23 @@ app.use(errorHandler);
 // Serve React app for all non-API routes (SPA routing)
 if (isProduction) {
   app.get('*', (req, res) => {
-    // Don't serve React app for API routes
-    if (req.path.startsWith('/api/')) {
-      return res.status(404).json({ error: 'API endpoint not found' });
+    // Don't serve React app for API routes or health check
+    if (req.path.startsWith('/api/') || req.path === '/health') {
+      return res.status(404).json({ error: 'Endpoint not found' });
     }
 
     const indexPath = path.join(__dirname, '../dist/index.html');
+    
+    // Check if index.html exists
+    if (!fs.existsSync(indexPath)) {
+      console.error(`❌ React app index.html not found: ${indexPath}`);
+      return res.status(500).json({ 
+        error: 'Application not built properly',
+        message: 'React app build files are missing'
+      });
+    }
+
+    console.log(`📄 Serving React app for: ${req.path}`);
     res.sendFile(indexPath, (err) => {
       if (err) {
         console.error('Error serving React app:', err);

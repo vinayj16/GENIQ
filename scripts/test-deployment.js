@@ -1,9 +1,3 @@
-#!/usr/bin/env node
-
-/**
- * Test script to verify deployment is working correctly
- */
-
 const API_BASE_URL = 'https://geniq-mtkc.onrender.com';
 const API_KEY = 'prod_geniq_api_key_2024'; // This should match your production API key
 
