@@ -33,7 +33,8 @@ try {
 
   // Step 2: Install frontend dependencies (including dev dependencies for build)
   log('Installing frontend dependencies...');
-  execSync('npm install', { stdio: 'inherit' });
+  process.env.NODE_ENV = 'development'; // Ensure dev dependencies are installed
+  execSync('npm install', { stdio: 'inherit', env: process.env });
   success('Frontend dependencies installed');
 
   // Step 3: Set environment variables for production build
@@ -44,17 +45,17 @@ try {
   // Step 4: Build the frontend
   log('Building React frontend...');
   execSync('npm run build', { stdio: 'inherit', env: process.env });
-  
+
   // Verify dist folder was created
   if (!fs.existsSync('dist')) {
     error('Frontend build failed - dist folder not created');
   }
-  
+
   // Verify index.html exists
   if (!fs.existsSync('dist/index.html')) {
     error('Frontend build failed - index.html not found');
   }
-  
+
   success('Frontend built successfully');
 
   // Step 5: Install backend dependencies
@@ -67,7 +68,7 @@ try {
   if (!fs.existsSync('server.js')) {
     error('Backend server.js not found');
   }
-  
+
   if (!fs.existsSync('start-prod.js')) {
     error('Backend start-prod.js not found');
   }
@@ -80,7 +81,7 @@ try {
     const distPath = path.join('..', 'dist');
     const files = fs.readdirSync(distPath);
     log(`Frontend build contains ${files.length} files/folders`);
-    
+
     const indexPath = path.join(distPath, 'index.html');
     const indexContent = fs.readFileSync(indexPath, 'utf8');
     const hasReact = indexContent.includes('react') || indexContent.includes('React') || indexContent.includes('root');
