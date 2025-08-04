@@ -33,15 +33,16 @@ process.on('uncaughtException', (error) => {
 (async () => {
   try {
     // Dynamic import for ES modules
-    const { default: server } = await import('./server.js');
+    const { startServer } = await import('./server.js');
     
     const port = process.env.PORT || 5000;
     const host = process.env.HOST || '0.0.0.0';
     
-    const app = server.listen(port, host, () => {
-      console.log(`✅ Server running on http://${host}:${port}`);
-      console.log('📊 Health check at http://${host}:${port}/health');
-    });
+    // Start the server
+    const server = startServer();
+    
+    console.log(`✅ Server running on http://${host}:${port}`);
+    console.log(`📊 Health check at http://${host}:${port}/health`);
 
     // Handle unhandled promise rejections
     process.on('unhandledRejection', (err) => {

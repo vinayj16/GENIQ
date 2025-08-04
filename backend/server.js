@@ -12,12 +12,15 @@ import dotenv from 'dotenv';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load environment variables
+// Load environment variables from root directory
 dotenv.config({
-  path: process.env.NODE_ENV === 'production' 
-    ? path.join(__dirname, '../.env.production')
-    : '.env'
+  path: path.join(__dirname, '../.env')
 });
+
+// In production, we expect Render to set the environment variables directly
+if (process.env.NODE_ENV === 'production') {
+  console.log(' Running in production mode with environment variables from host');
+}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -45,18 +48,17 @@ const limiter = rateLimit({
   }
 });
 
-// CORS configuration to allow requests from the frontend's origin
+// CORS configuration
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' 
-    ? [process.env.FRONTEND_URL, 'https://geniq.onrender.com']
-    : 'http://localhost:5173',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'X-API-Key', 'Authorization'],
+  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   credentials: true,
-  optionsSuccessStatus: 200 // For legacy browser support
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Range', 'X-Total-Count']
 };
 
 app.use(cors(corsOptions));
+console.log(`🌐 CORS enabled for origin: ${corsOptions.origin}`);
 app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -983,25 +985,39 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: 'Endpoint not found' });
 });
 
-// Export the Express app for testing and production
-const server = app.listen(PORT, () => {
-  const key = process.env.VITE_API_KEY;
-  const aiKey = process.env.GOOGLE_AI_API_KEY;
-  
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📡 CORS enabled for: ${corsOptions.origin}`);
-  
-  if (key) {
-    console.log(`🔑 API Key loaded: ****${key.slice(-4)}`);
-  } else {
-    console.log('⚠️  API Key is NOT loaded!');
-  }
-  
-  if (aiKey) {
-    console.log(`🤖 Google AI API Key loaded: ****${aiKey.slice(-4)}`);
-  } else {
-    console.log('⚠️  Google AI API Key is NOT loaded!');
-  }
-  
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-});
+// Function to start the server
+const startServer = () => {
+  const httpServer = app.listen(PORT, '0.0.0.0', () => {
+    const key = process.env.VITE_API_KEY;
+    const aiKey = process.env.GOOGLE_AI_API_KEY;
+    
+    console.log(`🚀 Server is running on port ${PORT}`);
+    
+    // Log API key status (only last 4 chars for security)
+    if (key) {
+      console.log(`🔑 API Key loaded: ****${key.slice(-4)}`);
+    } else {
+      console.log('⚠️  API Key is NOT loaded!');
+    }
+    
+    if (aiKey) {
+      console.log(`🤖 Google AI API Key loaded: ****${aiKey.slice(-4)}`);
+    } else {
+      console.log('⚠️  Google AI API Key is NOT loaded!');
+    }
+    
+    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
+
+  return httpServer;
+};
+
+// Only start the server if this file is run directly (not imported)
+if (import.meta.url === `file://${process.argv[1]}`) {
+  startServer();
+}
+
+// Export both app and startServer function
+// The app can be used for testing with supertest
+// The startServer function can be used to start the server with custom options
+export { app, startServer };
