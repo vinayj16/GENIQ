@@ -1,16 +1,43 @@
 import { Problem, Review } from '@/types/dashboard';
 
-// Base URL configuration - use Vite proxy in development, or full URL in production
+// Base URL configuration - use Vite proxy in development, or relative URL in production
 const API_BASE_URL = import.meta.env.DEV 
-  ? ''  // Vite proxy will handle the base URL in development
-  : import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+  ? '/api'  // Vite proxy will handle the base URL in development
+  : '/api'; // In production, we use relative URL since frontend is served from the same domain
 
-// Add a small delay to simulate network latency in development
-const simulateNetworkDelay = async () => {
-  if (import.meta.env.DEV) {
-    await new Promise(resolve => setTimeout(resolve, 300));
+// Helper function to handle API requests
+const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
+  const url = `${API_BASE_URL}${endpoint}`;
+  
+  // Set default headers
+  const headers = {
+    'Content-Type': 'application/json',
+    'X-API-Key': import.meta.env.VITE_API_KEY || '',
+    ...options.headers
+  };
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+      credentials: 'include' // Include cookies for authentication
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'API request failed');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error(`API request failed for ${endpoint}:`, error);
+    throw error;
   }
 };
+
+// Helper function to simulate network delay
+const simulateNetworkDelay = (ms: number = 500) => 
+  new Promise(resolve => setTimeout(resolve, ms));
 
 class ApiService {
   private allReviews: Review[] = [
@@ -465,6 +492,280 @@ class ApiService {
       reviewId: `review-${solutionId}-${Date.now()}`,
       message: 'Review submitted successfully!'
     };
+  }
+
+  // Enhanced Coding Problems method
+  async getEnhancedCodingProblems(filters?: { company?: string; role?: string; difficulty?: string; category?: string }) {
+    await simulateNetworkDelay();
+    
+    let problems = [...this.allProblems];
+    
+    // Add more sample problems for enhanced coding
+    const enhancedProblems: Problem[] = [
+      {
+        id: 2,
+        title: 'Add Two Numbers',
+        difficulty: 'Medium',
+        category: 'Linked List',
+        description: 'You are given two non-empty linked lists representing two non-negative integers.',
+        company: 'Amazon',
+        role: 'Software Engineer',
+        acceptance: '38.2%',
+        examples: [
+          {
+            input: 'l1 = [2,4,3], l2 = [5,6,4]',
+            output: '[7,0,8]',
+            explanation: '342 + 465 = 807.'
+          }
+        ],
+        constraints: [
+          'The number of nodes in each linked list is in the range [1, 100].',
+          '0 <= Node.val <= 9'
+        ],
+        topics: ['Linked List', 'Math', 'Recursion'],
+        companies: ['Amazon', 'Microsoft', 'Facebook'],
+        testCases: [
+          { input: { l1: [2,4,3], l2: [5,6,4] }, expected: [7,0,8] },
+          { input: { l1: [0], l2: [0] }, expected: [0] }
+        ],
+        codeTemplate: {
+          javascript: `function addTwoNumbers(l1, l2) {
+    // Write your solution here
+    let dummy = new ListNode(0);
+    let current = dummy;
+    let carry = 0;
+    
+    while (l1 || l2 || carry) {
+        let sum = carry;
+        if (l1) {
+            sum += l1.val;
+            l1 = l1.next;
+        }
+        if (l2) {
+            sum += l2.val;
+            l2 = l2.next;
+        }
+        
+        carry = Math.floor(sum / 10);
+        current.next = new ListNode(sum % 10);
+        current = current.next;
+    }
+    
+    return dummy.next;
+}`,
+          python: `def addTwoNumbers(l1, l2):
+    # Write your solution here
+    dummy = ListNode(0)
+    current = dummy
+    carry = 0
+    
+    while l1 or l2 or carry:
+        total = carry
+        if l1:
+            total += l1.val
+            l1 = l1.next
+        if l2:
+            total += l2.val
+            l2 = l2.next
+            
+        carry = total // 10
+        current.next = ListNode(total % 10)
+        current = current.next
+    
+    return dummy.next`,
+          java: `public ListNode addTwoNumbers(ListNode l1, ListNode l2) {
+    // Write your solution here
+    ListNode dummy = new ListNode(0);
+    ListNode current = dummy;
+    int carry = 0;
+    
+    while (l1 != null || l2 != null || carry != 0) {
+        int sum = carry;
+        if (l1 != null) {
+            sum += l1.val;
+            l1 = l1.next;
+        }
+        if (l2 != null) {
+            sum += l2.val;
+            l2 = l2.next;
+        }
+        
+        carry = sum / 10;
+        current.next = new ListNode(sum % 10);
+        current = current.next;
+    }
+    
+    return dummy.next;
+}`
+        },
+        hints: [
+          "Think about how you add numbers digit by digit.",
+          "Don't forget to handle the carry from one digit to the next."
+        ],
+        solution: {
+          approach: "Elementary Math",
+          timeComplexity: "O(max(m, n))",
+          spaceComplexity: "O(max(m, n))",
+          explanation: "We simulate the process of adding two numbers digit by digit."
+        }
+      },
+      {
+        id: 3,
+        title: 'Longest Substring Without Repeating Characters',
+        difficulty: 'Medium',
+        category: 'String',
+        description: 'Given a string s, find the length of the longest substring without repeating characters.',
+        company: 'Google',
+        role: 'Software Engineer',
+        acceptance: '33.8%',
+        examples: [
+          {
+            input: 's = "abcabcbb"',
+            output: '3',
+            explanation: 'The answer is "abc", with the length of 3.'
+          }
+        ],
+        constraints: [
+          '0 <= s.length <= 5 * 10^4',
+          's consists of English letters, digits, symbols and spaces.'
+        ],
+        topics: ['Hash Table', 'String', 'Sliding Window'],
+        companies: ['Google', 'Amazon', 'Facebook'],
+        testCases: [
+          { input: { s: "abcabcbb" }, expected: 3 },
+          { input: { s: "bbbbb" }, expected: 1 },
+          { input: { s: "pwwkew" }, expected: 3 }
+        ],
+        codeTemplate: {
+          javascript: `function lengthOfLongestSubstring(s) {
+    // Write your solution here
+    let maxLength = 0;
+    let left = 0;
+    const charMap = new Map();
+    
+    for (let right = 0; right < s.length; right++) {
+        if (charMap.has(s[right])) {
+            left = Math.max(charMap.get(s[right]) + 1, left);
+        }
+        charMap.set(s[right], right);
+        maxLength = Math.max(maxLength, right - left + 1);
+    }
+    
+    return maxLength;
+}`,
+          python: `def lengthOfLongestSubstring(s):
+    # Write your solution here
+    char_map = {}
+    left = 0
+    max_length = 0
+    
+    for right in range(len(s)):
+        if s[right] in char_map:
+            left = max(char_map[s[right]] + 1, left)
+        char_map[s[right]] = right
+        max_length = max(max_length, right - left + 1)
+    
+    return max_length`,
+          java: `public int lengthOfLongestSubstring(String s) {
+    // Write your solution here
+    Map<Character, Integer> charMap = new HashMap<>();
+    int left = 0;
+    int maxLength = 0;
+    
+    for (int right = 0; right < s.length(); right++) {
+        if (charMap.containsKey(s.charAt(right))) {
+            left = Math.max(charMap.get(s.charAt(right)) + 1, left);
+        }
+        charMap.put(s.charAt(right), right);
+        maxLength = Math.max(maxLength, right - left + 1);
+    }
+    
+    return maxLength;
+}`
+        },
+        hints: [
+          "Use a sliding window approach with two pointers.",
+          "Keep track of characters you've seen and their positions."
+        ],
+        solution: {
+          approach: "Sliding Window",
+          timeComplexity: "O(n)",
+          spaceComplexity: "O(min(m, n))",
+          explanation: "We use a sliding window with a hash map to track character positions."
+        }
+      }
+    ];
+
+    problems = [...problems, ...enhancedProblems];
+    
+    // Apply filters
+    if (filters?.company) {
+      problems = problems.filter(p => 
+        p.company.toLowerCase().includes(filters.company!.toLowerCase()) ||
+        p.companies?.some(c => c.toLowerCase().includes(filters.company!.toLowerCase()))
+      );
+    }
+    
+    if (filters?.difficulty) {
+      problems = problems.filter(p => 
+        p.difficulty.toLowerCase() === filters.difficulty!.toLowerCase()
+      );
+    }
+    
+    if (filters?.category) {
+      problems = problems.filter(p => 
+        p.category.toLowerCase().includes(filters.category!.toLowerCase())
+      );
+    }
+    
+    return problems;
+  }
+
+  // Fallback problems method
+  async getFallbackProblems() {
+    await simulateNetworkDelay();
+    return this.allProblems;
+  }
+
+  // Enhanced MCQs method
+  async getMCQs(filters?: { company?: string; category?: string; difficulty?: string; limit?: number }) {
+    try {
+      // Build query parameters
+      const params = new URLSearchParams();
+      
+      if (filters) {
+        if (filters.company) params.append('company', filters.company);
+        if (filters.category && filters.category !== 'all') params.append('category', filters.category);
+        if (filters.difficulty && filters.difficulty !== 'all') params.append('difficulty', filters.difficulty);
+        if (filters.limit) params.append('limit', filters.limit.toString());
+      }
+      
+      // Make API request
+      const response = await apiRequest(`/mcqs?${params.toString()}`, {
+        method: 'GET'
+      });
+      
+      // Transform API response to match MCQ interface
+      const mcqs = response.map((mcq: any) => ({
+        id: mcq.id || `mcq-${Math.random().toString(36).substr(2, 9)}`,
+        question: mcq.question,
+        options: mcq.options || [],
+        correct: mcq.correctIndex || 0,
+        category: mcq.category || 'General',
+        difficulty: mcq.difficulty || 'Medium',
+        company: mcq.company || filters?.company || 'General',
+        role: mcq.role || 'Software Engineer',
+        explanation: mcq.explanation || 'No explanation available',
+        showExplanation: false,
+        userAnswer: null
+      }));
+      
+      return mcqs;
+    } catch (error) {
+      console.error('Failed to fetch MCQs:', error);
+      // Return empty array in case of error
+      return [];
+    }
   }
 }
 

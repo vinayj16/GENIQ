@@ -54,17 +54,16 @@ const limiter = rateLimit({
 
 // CORS configuration
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || (isProduction ?
-    ['https://geniq-frontend.netlify.app', 'https://geniq-frontend.vercel.app'] :
-    'http://localhost:5173'),
-  credentials: true,
+  origin: isProduction ? true : 'http://localhost:5173', // Allow all origins in production (same-origin)
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-API-Key'],
-  exposedHeaders: ['Content-Range', 'X-Total-Count']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-Requested-With'],
+  credentials: true,
+  optionsSuccessStatus: 200
 };
 
 app.use(cors(corsOptions));
 console.log(`🌐 CORS enabled for origin: ${corsOptions.origin}`);
+
 app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

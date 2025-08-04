@@ -7,9 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { apiService } from '../../lib/api';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { apiService } from '@/lib/api';
 
 interface MCQ {
   id: string | number;
@@ -25,10 +25,24 @@ interface MCQ {
   userAnswer?: number | null;
 }
 
-const EnhancedMCQs = () => {
+interface MCQ {
+  id: string | number;
+  question: string;
+  options: string[];
+  correct: number;
+  explanation: string;
+  category: string;
+  difficulty: string;
+  company: string;
+  role?: string;
+  showExplanation?: boolean;
+  userAnswer?: number | null;
+}
+
+const EnhancedMCQs: React.FC = () => {
   // State for form inputs
-  const [companyInput, setCompanyInput] = useState('');
-  const [roleInput, setRoleInput] = useState('');
+  const [companyInput, setCompanyInput] = useState<string>('');
+  const [roleInput, setRoleInput] = useState<string>('');
 
   // State for filters
   const [filters, setFilters] = useState({
@@ -39,17 +53,88 @@ const EnhancedMCQs = () => {
 
   // State for MCQs and test flow
   const [mcqs, setMcqs] = useState<MCQ[]>([]);
-  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [currentQuestion, setCurrentQuestion] = useState<number>(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [userAnswers, setUserAnswers] = useState<(number | null)[]>([]);
-  const [score, setScore] = useState(0);
-  const [submitted, setSubmitted] = useState(false);
-  const [showResult, setShowResult] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [testStarted, setTestStarted] = useState(false);
-  const [learningMode, setLearningMode] = useState(true);
-  const [timeLeft, setTimeLeft] = useState(1800); // 30 minutes in seconds
-  const [timerActive, setTimerActive] = useState(false);
+  const [score, setScore] = useState<number>(0);
+  const [submitted, setSubmitted] = useState<boolean>(false);
+  const [showResult, setShowResult] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [testStarted, setTestStarted] = useState<boolean>(false);
+  const [learningMode, setLearningMode] = useState<boolean>(true);
+  const [timeLeft, setTimeLeft] = useState<number>(1800); // 30 minutes in seconds
+  const [timerActive, setTimerActive] = useState<boolean>(false);
+
+  // Helper function to calculate score
+  const calculateScore = (answers: (number | null)[], questions: MCQ[]): number => {
+    return answers.reduce((acc, answer, index) => {
+      return answer === questions[index]?.correct ? acc + 1 : acc;
+    }, 0);
+  };
+
+  // Handle answer selection
+  const handleAnswerSelect = (answerIndex: number) => {
+    if (submitted || !testStarted) return;
+    
+    const newAnswers = [...userAnswers];
+    newAnswers[currentQuestion] = answerIndex;
+    setUserAnswers(newAnswers);
+    setSelectedAnswer(answerIndex);
+    
+    if (learningMode) {
+      // In learning mode, show explanation immediately
+      const updatedMcqs = [...mcqs];
+      updatedMcqs[currentQuestion] = {
+        ...updatedMcqs[currentQuestion],
+        showExplanation: true,
+        userAnswer: answerIndex
+      };
+      setMcqs(updatedMcqs);
+    }
+  };
+
+  // Move to next question
+  const nextQuestion = () => {
+    if (currentQuestion < mcqs.length - 1) {
+      setCurrentQuestion(prev => prev + 1);
+      setSelectedAnswer(userAnswers[currentQuestion + 1] ?? null);
+    }
+  };
+
+  // Move to previous question
+  const prevQuestion = () => {
+    if (currentQuestion > 0) {
+      setCurrentQuestion(prev => prev - 1);
+      setSelectedAnswer(userAnswers[currentQuestion - 1] ?? null);
+    }
+  };
+
+  // Submit test
+  const submitTest = () => {
+    const finalScore = calculateScore(userAnswers, mcqs);
+    setScore(finalScore);
+    setSubmitted(true);
+    setShowResult(true);
+    setTimerActive(false);
+  };
+
+  // Reset test
+  const resetTest = () => {
+    setMcqs(prev => prev.map(mcq => ({
+      ...mcq,
+      showExplanation: false,
+      userAnswer: null
+    })));
+    setUserAnswers(new Array(mcqs.length).fill(null));
+    setCurrentQuestion(0);
+    setSelectedAnswer(null);
+    setSubmitted(false);
+    setShowResult(false);
+    setScore(0);
+    setTimeLeft(1800);
+    setTestStarted(false);
+    setLearningMode(true);
+  };
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -102,70 +187,64 @@ const EnhancedMCQs = () => {
     setScore(0);
   };
 
-  const fetchMCQs = async (startInLearningMode = true) => {
+  const fetchMCQs = async () => {
     try {
       setLoading(true);
 
-      // Get mock data with filters
-      const mockData = await apiService.getMCQs({
-        company: companyInput.trim() || 'Demo Company',
-        category: filters.category === 'all' ? undefined : filters.category,
-        difficulty: filters.difficulty === 'all' ? undefined : filters.difficulty,
-        limit: 10
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (companyInput) params.append('company', companyInput);
+      if (roleInput) params.append('role', roleInput);
+      if (filters.category !== 'all') params.append('category', filters.category);
+      if (filters.difficulty !== 'all') params.append('difficulty', filters.difficulty);
+      if (filters.limit) params.append('limit', filters.limit.toString());
+
+      // Call the API service to fetch MCQs
+      const fetchedMCQs = await apiService.getMCQs({
+        company: companyInput,
+        category: filters.category !== 'all' ? filters.category : undefined,
+        difficulty: filters.difficulty !== 'all' ? filters.difficulty : undefined,
+        limit: filters.limit
       });
 
-      console.log('Mock data received:', mockData);
-
-      // Generate default questions if no data is returned
-      const mcqData = Array.isArray(mockData) && mockData.length > 0
-        ? mockData
-        : [{
-          id: 'default-1',
-          question: 'Sample question about Algorithms (Medium)',
-          options: [
-            'Incorrect option 1 about Algorithms',
-            'Incorrect option 2 about Algorithms',
-            'Incorrect option 3 about Algorithms',
-            'Correct answer for Algorithms'
-          ],
-          correct: 3,
-          explanation: 'This is a sample explanation for the question about Algorithms.',
-          category: 'Algorithms',
-          difficulty: 'Medium',
-          company: companyInput.trim() || 'Demo Company',
-          showExplanation: startInLearningMode,
-          userAnswer: null
-        }];
-
-      console.log('Processed MCQs:', mcqData);
-
-      if (mcqData.length === 0) {
-        console.error('No MCQs available after processing');
-        toast.error('No questions found. Please try different filters.');
+      if (fetchedMCQs.length === 0) {
+        toast.info('No MCQs found for the selected filters. Try different criteria.');
         return;
       }
 
-      setMcqs(mcqData);
-      setUserAnswers(new Array(mcqData.length).fill(null));
+      // Transform the response to match our MCQ interface
+      const formattedMCQs: MCQ[] = fetchedMCQs.map((mcq: any) => ({
+        id: mcq.id || Math.random().toString(36).substr(2, 9),
+        question: mcq.question || 'Sample question',
+        options: Array.isArray(mcq.options) ? mcq.options : ['Option 1', 'Option 2', 'Option 3', 'Option 4'],
+        correct: typeof mcq.correct === 'number' ? mcq.correct : 0,
+        explanation: mcq.explanation || 'No explanation available',
+        category: mcq.category || 'General',
+        difficulty: mcq.difficulty || 'Medium',
+        company: mcq.company || 'General',
+        role: mcq.role || '',
+        showExplanation: false,
+        userAnswer: null
+      }));
+
+      // Update state with the fetched and formatted MCQs
+      setMcqs(formattedMCQs);
       setCurrentQuestion(0);
+      setSelectedAnswer(null);
+      setUserAnswers(new Array(formattedMCQs.length).fill(null));
+      setScore(0);
       setSubmitted(false);
       setShowResult(false);
 
-      // Always start in learning mode first
+      // Start in learning mode with the first question
       setLearningMode(true);
       setTestStarted(true);
+      setTimerActive(false);
 
-      // Auto-scroll to questions
-      setTimeout(() => {
-        const questionsSection = document.getElementById('questions-section');
-        if (questionsSection) {
-          questionsSection.scrollIntoView({ behavior: 'smooth' });
-        }
-      }, 100);
-
+      toast.success(`Fetched ${formattedMCQs.length} MCQs`);
     } catch (error) {
       console.error('Error fetching MCQs:', error);
-      alert('Failed to fetch MCQs. Please try again later.');
+      toast.error(error instanceof Error ? error.message : 'Failed to fetch MCQs. Please try again later.');
     } finally {
       setLoading(false);
     }

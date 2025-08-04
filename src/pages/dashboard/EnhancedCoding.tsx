@@ -65,9 +65,18 @@ const EnhancedCoding = () => {
     const loadInitialProblems = async () => {
       setLoading(true);
       try {
+        console.log('Loading initial problems...');
         const fallbackProblems = await apiService.getFallbackProblems();
-        setProblems(fallbackProblems);
-        setFilteredProblems(fallbackProblems);
+        console.log('Loaded problems:', fallbackProblems);
+        
+        if (fallbackProblems && fallbackProblems.length > 0) {
+          setProblems(fallbackProblems);
+          setFilteredProblems(fallbackProblems);
+          console.log('Problems set successfully:', fallbackProblems.length);
+        } else {
+          console.warn('No problems returned from API');
+          toast.error('No problems available. Please try again later.');
+        }
       } catch (error) {
         toast.error('Failed to load introductory problems.');
         console.error('Failed to load introductory problems:', error);
