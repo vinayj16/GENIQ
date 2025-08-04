@@ -10,15 +10,16 @@ const __dirname = path.dirname(__filename);
 // Set production environment
 process.env.NODE_ENV = 'production';
 
-// Load environment variables
-dotenv.config({
-  path: path.join(__dirname, '../.env.production')
+// Load environment variables from .env file
+require('dotenv').config({
+  path: process.env.NODE_ENV === 'production' 
+    ? '.env.production' 
+    : '.env'
 });
 
-// Log environment info
 console.log('🚀 Starting GENIQ Backend in production mode...');
 console.log('📅', new Date().toISOString());
-console.log('🌐 Environment:', process.env.NODE_ENV);
+console.log('🌐 Environment:', process.env.NODE_ENV || 'development');
 console.log('🔌 Port:', process.env.PORT || 5000);
 console.log('🏠 Host:', process.env.HOST || '0.0.0.0');
 
@@ -32,7 +33,7 @@ process.on('uncaughtException', (error) => {
 // Start the server with error handling
 (async () => {
   try {
-    // Dynamic import for ES modules
+    // Import the server module
     const { startServer } = await import('./server.js');
     
     const port = process.env.PORT || 5000;
@@ -43,12 +44,21 @@ process.on('uncaughtException', (error) => {
     
     console.log(`✅ Server running on http://${host}:${port}`);
     console.log(`📊 Health check at http://${host}:${port}/health`);
+    
+    // Log API key status
+    const apiKey = process.env.VITE_API_KEY;
+    console.log(`🔑 API Key loaded: ${apiKey ? '****' + apiKey.slice(-3) : 'Not set'}`);
+    
+    const googleApiKey = process.env.GOOGLE_AI_API_KEY;
+    console.log(`🤖 Google AI API Key loaded: ${googleApiKey ? '****' + googleApiKey.slice(-4) : 'Not set'}`);
+    
+    console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
 
     // Handle unhandled promise rejections
     process.on('unhandledRejection', (err) => {
       console.error('UNHANDLED REJECTION! 💥 Shutting down...');
       console.error(err);
-      app.close(() => {
+      server.close(() => {
         process.exit(1);
       });
     });
@@ -56,13 +66,14 @@ process.on('uncaughtException', (error) => {
     // Handle SIGTERM for graceful shutdown
     process.on('SIGTERM', () => {
       console.log('👋 SIGTERM RECEIVED. Shutting down gracefully');
-      app.close(() => {
+      server.close(() => {
         console.log('💤 Process terminated!');
       });
     });
 
   } catch (error) {
-    console.error('FATAL ERROR:', error);
+    console.error('❌ Failed to start server:');
+    console.error(error);
     process.exit(1);
   }
 })();

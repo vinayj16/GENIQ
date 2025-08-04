@@ -32,7 +32,10 @@ if (isProduction) {
 }
 
 // Security middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable CSP for React app
+  crossOriginEmbedderPolicy: false
+}));
 app.use(compression());
 
 // Rate limiting
@@ -50,10 +53,12 @@ const limiter = rateLimit({
 
 // CORS configuration
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: process.env.CORS_ORIGIN || (isProduction ?
+    ['https://geniq-frontend.netlify.app', 'https://geniq-frontend.vercel.app'] :
+    'http://localhost:5173'),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-API-Key'],
   exposedHeaders: ['Content-Range', 'X-Total-Count']
 };
 
@@ -62,6 +67,13 @@ console.log(`🌐 CORS enabled for origin: ${corsOptions.origin}`);
 app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Serve static files from the React app build directory
+if (isProduction) {
+  const buildPath = path.join(__dirname, '../dist');
+  console.log(`📁 Serving static files from: ${buildPath}`);
+  app.use(express.static(buildPath));
+}
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -72,10 +84,12 @@ app.use((req, res, next) => {
 // Middleware to check for API key
 const apiKeyAuth = (req, res, next) => {
   const apiKey = req.get('X-API-Key');
-  if (apiKey && apiKey === process.env.VITE_API_KEY) {
+  const expectedApiKey = process.env.VITE_API_KEY || 'dev_test_key_123';
+
+  if (apiKey && apiKey === expectedApiKey) {
     next();
   } else {
-    console.log(`Unauthorized access attempt from ${req.ip}`);
+    console.log(`Unauthorized access attempt from ${req.ip}. Expected: ${expectedApiKey ? '****' + expectedApiKey.slice(-4) : 'None'}, Got: ${apiKey ? '****' + apiKey.slice(-4) : 'None'}`);
     res.status(401).json({ error: 'Unauthorized: Missing or invalid API key' });
   }
 };
@@ -94,7 +108,7 @@ const errorHandler = (err, req, res, next) => {
     method: req.method,
     timestamp: new Date().toISOString()
   });
-  
+
   const statusCode = err.statusCode || 500;
   const response = {
     error: statusCode === 500 ? 'Internal Server Error' : err.message,
@@ -201,9 +215,9 @@ const sampleProblems = [
     difficulty: 'Easy',
     category: 'algorithms',
     testCases: [
-      { input: { nums: [2,7,11,15], target: 9 }, output: [0,1] },
-      { input: { nums: [3,2,4], target: 6 }, output: [1,2] },
-      { input: { nums: [3,3], target: 6 }, output: [0,1] }
+      { input: { nums: [2, 7, 11, 15], target: 9 }, output: [0, 1] },
+      { input: { nums: [3, 2, 4], target: 6 }, output: [1, 2] },
+      { input: { nums: [3, 3], target: 6 }, output: [0, 1] }
     ],
     solution: 'function twoSum(nums, target) {\n  const map = new Map();\n  for (let i = 0; i < nums.length; i++) {\n    const complement = target - nums[i];\n    if (map.has(complement)) {\n      return [map.get(complement), i];\n    }\n    map.set(nums[i], i);\n  }\n  return [];\n}'
   },
@@ -214,8 +228,8 @@ const sampleProblems = [
     difficulty: 'Easy',
     category: 'algorithms',
     testCases: [
-      { input: { s: ["h","e","l","l","o"] }, output: ["o","l","l","e","h"] },
-      { input: { s: ["H","a","n","n","a","h"] }, output: ["h","a","n","n","a","H"] }
+      { input: { s: ["h", "e", "l", "l", "o"] }, output: ["o", "l", "l", "e", "h"] },
+      { input: { s: ["H", "a", "n", "n", "a", "h"] }, output: ["h", "a", "n", "n", "a", "H"] }
     ],
     solution: 'function reverseString(s) {\n  let left = 0;\n  let right = s.length - 1;\n  while (left < right) {\n    [s[left], s[right]] = [s[right], s[left]];\n    left++;\n    right--;\n  }\n  return s;\n}'
   },
@@ -327,7 +341,7 @@ const sanitizeReviewData = (review) => {
     rating: Math.min(5, Math.max(1, parseInt(review.rating) || 3)),
     date: String(review.date || new Date().toISOString().split('T')[0]),
     interview_process: String(review.interview_process || ''),
-    questions_asked: Array.isArray(review.questions_asked) 
+    questions_asked: Array.isArray(review.questions_asked)
       ? review.questions_asked.map(q => String(q)).filter(q => q.trim())
       : [],
     preparation_tips: String(review.preparation_tips || ''),
@@ -339,7 +353,7 @@ const sanitizeReviewData = (review) => {
 app.get('/api/reviews', apiKeyAuth, async (req, res) => {
   try {
     const { company, role } = req.query;
-    
+
     // If no filters provided, return sample reviews (sanitized)
     if (!company && !role) {
       return res.json(sampleReviews.map(sanitizeReviewData));
@@ -347,9 +361,9 @@ app.get('/api/reviews', apiKeyAuth, async (req, res) => {
 
     // Filter existing sample reviews first
     const filteredReviews = sampleReviews.filter(review => {
-      const companyMatch = !company || 
+      const companyMatch = !company ||
         (review.company && review.company.toLowerCase().includes(company.toLowerCase()));
-      const roleMatch = !role || 
+      const roleMatch = !role ||
         (review.role && review.role.toLowerCase().includes(role.toLowerCase()));
       return companyMatch && roleMatch;
     });
@@ -362,7 +376,7 @@ app.get('/api/reviews', apiKeyAuth, async (req, res) => {
     // If no matches and both company and role are provided, generate AI review
     if (company && role) {
       const cacheKey = getCacheKey(company, role);
-      
+
       // Check cache first
       if (reviewCache.has(cacheKey)) {
         const { data, timestamp } = reviewCache.get(cacheKey);
@@ -377,13 +391,13 @@ app.get('/api/reviews', apiKeyAuth, async (req, res) => {
       // Generate AI review
       const aiReview = await generateAIReview(company, role);
       const sanitizedAiReview = sanitizeReviewData(aiReview);
-      
+
       // Cache the result
       reviewCache.set(cacheKey, {
         data: [sanitizedAiReview],
         timestamp: Date.now()
       });
-      
+
       return res.json([sanitizedAiReview]);
     }
 
@@ -399,7 +413,7 @@ app.get('/api/reviews', apiKeyAuth, async (req, res) => {
 app.post('/api/reviews', apiKeyAuth, async (req, res) => {
   try {
     const { company, role, experience, difficulty, rating, interview_process, questions_asked, preparation_tips } = req.body;
-    
+
     if (!company || !role) {
       return res.status(400).json({ error: 'Company and role are required' });
     }
@@ -450,7 +464,7 @@ app.post('/api/reviews', apiKeyAuth, async (req, res) => {
       const result = await model.generateContent(prompt);
       const response = await result.response;
       const text = response.text();
-      
+
       // Extract JSON from the response
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
@@ -461,8 +475,11 @@ app.post('/api/reviews', apiKeyAuth, async (req, res) => {
       // Continue without AI insights
     }
 
-    // Add to sample reviews for future queries
+    // Add to sample reviews for future queries (limit to prevent memory issues)
     sampleReviews.unshift(submittedReview);
+    if (sampleReviews.length > 100) {
+      sampleReviews.splice(50); // Keep only the latest 50 reviews
+    }
 
     // Return the submitted review with AI insights
     const response = {
@@ -482,7 +499,7 @@ app.post('/api/reviews', apiKeyAuth, async (req, res) => {
 async function generateAIReview(company, role) {
   try {
     const model = initializeAI();
-    
+
     const prompt = `Generate a realistic and detailed interview review for a ${role} position at ${company}. Include:
     - Interview experience (Positive/Mixed/Negative)
     - Interview difficulty (Easy/Medium/Hard)
@@ -508,15 +525,15 @@ async function generateAIReview(company, role) {
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
-    
+
     // Extract JSON from the response
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error('Failed to parse AI response');
     }
-    
+
     const review = JSON.parse(jsonMatch[0]);
-    
+
     // Process and validate the review
     return sanitizeReviewData({
       id: Date.now(),
@@ -527,15 +544,15 @@ async function generateAIReview(company, role) {
       rating: Math.min(5, Math.max(1, parseInt(review.rating) || 3)),
       date: review.date || new Date().toISOString().split('T')[0],
       interview_process: review.interview_process || 'Not specified',
-      questions_asked: Array.isArray(review.questions_asked) ? 
-        review.questions_asked.map(q => String(q)) : 
+      questions_asked: Array.isArray(review.questions_asked) ?
+        review.questions_asked.map(q => String(q)) :
         ['No questions provided'],
       preparation_tips: review.preparation_tips || 'No preparation tips provided',
       author: 'AI Generated'
     });
   } catch (error) {
     console.error('AI review generation failed:', error);
-    
+
     // Return a fallback review
     return sanitizeReviewData({
       id: Date.now(),
@@ -594,19 +611,19 @@ app.get('/api/problems', apiKeyAuth, (req, res) => {
   try {
     const { category, difficulty } = req.query;
     let filteredProblems = [...sampleProblems];
-    
+
     if (category) {
-      filteredProblems = filteredProblems.filter(problem => 
+      filteredProblems = filteredProblems.filter(problem =>
         problem.category.toLowerCase() === category.toLowerCase()
       );
     }
-    
+
     if (difficulty) {
-      filteredProblems = filteredProblems.filter(problem => 
+      filteredProblems = filteredProblems.filter(problem =>
         problem.difficulty.toLowerCase() === difficulty.toLowerCase()
       );
     }
-    
+
     res.setHeader('Content-Type', 'application/json');
     res.status(200).json(filteredProblems);
   } catch (error) {
@@ -634,16 +651,16 @@ app.get('/api/problems/:id', apiKeyAuth, (req, res) => {
 app.get('/api/mcqs', apiKeyAuth, (req, res) => {
   const { category, difficulty, company, role } = req.query;
   let filteredMCQs = [...sampleMCQs];
-  
+
   try {
     if (category) filteredMCQs = filteredMCQs.filter(q => q.category && q.category.toLowerCase() === category.toLowerCase());
     if (difficulty) filteredMCQs = filteredMCQs.filter(q => q.difficulty && q.difficulty.toLowerCase() === difficulty.toLowerCase());
     if (company) filteredMCQs = filteredMCQs.filter(q => q.company && q.company.toLowerCase().includes(company.toLowerCase()));
     // If role is provided, filter by role (case-insensitive)
-    if (role) filteredMCQs = filteredMCQs.filter(q => 
+    if (role) filteredMCQs = filteredMCQs.filter(q =>
       q.role && q.role.toLowerCase().includes(role.toLowerCase())
     );
-    
+
     res.setHeader('Content-Type', 'application/json');
     return res.status(200).json(filteredMCQs);
   } catch (error) {
@@ -808,7 +825,7 @@ app.get('/api/leaderboard', apiKeyAuth, (req, res) => {
 app.post('/api/mock-interview', apiKeyAuth, async (req, res) => {
   try {
     const { company, role, experience, duration } = req.body;
-    
+
     if (!company || !role) {
       return res.status(400).json({ error: 'Company and role are required' });
     }
@@ -841,7 +858,7 @@ app.post('/api/mock-interview', apiKeyAuth, async (req, res) => {
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
-    
+
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const interviewData = JSON.parse(jsonMatch[0]);
@@ -859,7 +876,7 @@ app.post('/api/mock-interview', apiKeyAuth, async (req, res) => {
 app.post('/api/resume/analyze', apiKeyAuth, async (req, res) => {
   try {
     const { resumeText, targetRole, targetCompany } = req.body;
-    
+
     if (!resumeText) {
       return res.status(400).json({ error: 'Resume text is required' });
     }
@@ -890,7 +907,7 @@ app.post('/api/resume/analyze', apiKeyAuth, async (req, res) => {
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
-    
+
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const analysis = JSON.parse(jsonMatch[0]);
@@ -908,7 +925,7 @@ app.post('/api/resume/analyze', apiKeyAuth, async (req, res) => {
 app.post('/api/study-plan', apiKeyAuth, async (req, res) => {
   try {
     const { targetRole, currentLevel, timeAvailable, weakAreas } = req.body;
-    
+
     const model = initializeAI();
     const prompt = `Create a personalized study plan for someone preparing for a ${targetRole} position.
     
@@ -928,7 +945,7 @@ app.post('/api/study-plan', apiKeyAuth, async (req, res) => {
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
-    
+
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const studyPlan = JSON.parse(jsonMatch[0]);
@@ -946,7 +963,7 @@ app.post('/api/study-plan', apiKeyAuth, async (req, res) => {
 app.get('/api/company/:name/insights', apiKeyAuth, async (req, res) => {
   try {
     const { name } = req.params;
-    
+
     const model = initializeAI();
     const prompt = `Provide comprehensive interview insights for ${name} company:
     
@@ -963,7 +980,7 @@ app.get('/api/company/:name/insights', apiKeyAuth, async (req, res) => {
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
-    
+
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const insights = JSON.parse(jsonMatch[0]);
@@ -980,32 +997,50 @@ app.get('/api/company/:name/insights', apiKeyAuth, async (req, res) => {
 // Apply error handling middleware
 app.use(errorHandler);
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({ error: 'Endpoint not found' });
-});
+// Serve React app for all non-API routes (SPA routing)
+if (isProduction) {
+  app.get('*', (req, res) => {
+    // Don't serve React app for API routes
+    if (req.path.startsWith('/api/')) {
+      return res.status(404).json({ error: 'API endpoint not found' });
+    }
+
+    const indexPath = path.join(__dirname, '../dist/index.html');
+    res.sendFile(indexPath, (err) => {
+      if (err) {
+        console.error('Error serving React app:', err);
+        res.status(500).json({ error: 'Failed to serve application' });
+      }
+    });
+  });
+} else {
+  // 404 handler for development
+  app.use('*', (req, res) => {
+    res.status(404).json({ error: 'Endpoint not found' });
+  });
+}
 
 // Function to start the server
 const startServer = () => {
   const httpServer = app.listen(PORT, '0.0.0.0', () => {
     const key = process.env.VITE_API_KEY;
     const aiKey = process.env.GOOGLE_AI_API_KEY;
-    
+
     console.log(`🚀 Server is running on port ${PORT}`);
-    
+
     // Log API key status (only last 4 chars for security)
     if (key) {
       console.log(`🔑 API Key loaded: ****${key.slice(-4)}`);
     } else {
       console.log('⚠️  API Key is NOT loaded!');
     }
-    
+
     if (aiKey) {
       console.log(`🤖 Google AI API Key loaded: ****${aiKey.slice(-4)}`);
     } else {
       console.log('⚠️  Google AI API Key is NOT loaded!');
     }
-    
+
     console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   });
 

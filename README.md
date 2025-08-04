@@ -2,74 +2,67 @@
 
 🚀 **Transform your interview preparation with AI-powered insights and comprehensive practice tools.**
 
-[![Deploy to Render](https://render.com/images/deploy-to-render/button.svg)](https://render.com/deploy?repo=https://github.com/yourusername/geniq)
+## 🌐 Live Demo
+- **Backend API**: https://geniq-mtkc.onrender.com
+- **Frontend**: Deploy your own using the instructions below
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
 - Node.js 18+ and npm
-- Render.com account (for deployment)
 - Google AI API key (for Gemini AI features)
+- Hosting account (Render, Netlify, Vercel, etc.)
 
 ### Local Development
 
-1. Clone the repository:
+1. **Clone and setup**:
    ```bash
-   git clone https://github.com/yourusername/geniq.git
-   cd geniq
-   ```
-
-2. Install dependencies:
-   ```bash
-   # Install frontend dependencies
+   git clone https://github.com/vinayj16/GENIQ.git
+   cd GENIQ
    npm install
-   
-   # Install backend dependencies
-   cd backend
-   npm install
-   cd ..
+   cd backend && npm install && cd ..
    ```
 
-3. Set up environment variables:
-   - Copy `.env.example` to `.env` in the root directory
-   - Add your Google AI API key to the `.env` file
-
-4. Start the development servers:
+2. **Setup environment**:
    ```bash
-   # Start frontend (port 5173)
-   npm run dev
-   
-   # In a new terminal, start the backend (port 5000)
-   cd backend
-   npm run dev
+   npm run setup
+   # This creates .env file - edit it to add your Google AI API key
    ```
+
+3. **Start development servers**:
+   ```bash
+   npm run start-full
+   # This starts both frontend (5173) and backend (5000)
+   ```
+
+4. **Visit**: http://localhost:5173
 
 ## 🚀 Deployment
 
-### Deploy to Render (Recommended)
+### 🎯 Single-Service Deployment (Recommended)
 
-1. Fork this repository to your GitHub account
-2. Sign up for a [Render](https://render.com) account if you haven't already
-3. Click the "Deploy to Render" button above or run:
+Deploy both frontend and backend together on Render:
+
+#### Update Your Render Service:
+1. **Build Command**: `cd backend && npm run build`
+2. **Start Command**: `cd backend && npm start`
+3. **Environment Variables**:
    ```bash
-   # Make the deployment script executable
-   chmod +x deploy.sh
-   
-   # Run the deployment script
-   ./deploy.sh
+   NODE_ENV=production
+   VITE_API_KEY=prod_geniq_api_key_2024
+   GOOGLE_AI_API_KEY=your_actual_google_ai_api_key_here
    ```
-4. Follow the prompts to complete the deployment
 
-### Manual Deployment
+#### Test Your Deployment:
+```bash
+node scripts/test-single-deployment.js
+```
 
-1. Create a new Web Service on Render
-2. Connect your GitHub repository
-3. Configure the service:
-   - **Build Command**: `npm install && npm run build`
-   - **Start Command**: `npm run preview`
-   - **Environment Variables**: Add all variables from `.env.example`
-4. Deploy!
+**📖 For detailed single-service deployment, see [RENDER_SINGLE_DEPLOYMENT.md](./RENDER_SINGLE_DEPLOYMENT.md)**
+
+### 🔄 Alternative: Separate Services
+If you prefer separate frontend/backend services, see [DEPLOYMENT.md](./DEPLOYMENT.md)
 
 ## 📦 Project Structure
 

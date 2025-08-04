@@ -7,11 +7,17 @@
     "dev": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
+    "build:prod": "vite build --mode production",
     "lint": "eslint .",
     "preview": "vite preview",
     "test-api": "node test-api.js",
     "start-backend": "cd backend && npm start",
-    "start-full": "concurrently \"npm run start-backend\" \"npm run dev\""
+    "start-full": "concurrently \"npm run start-backend\" \"npm run dev\"",
+    "setup": "node scripts/setup-env.js",
+    "deploy:build": "npm run build:prod",
+    "check-env": "node -e \"console.log('API URL:', process.env.VITE_API_URL || 'Not set'); console.log('API Key:', process.env.VITE_API_KEY ? '****' + process.env.VITE_API_KEY.slice(-4) : 'Not set');\"",
+    "heroku-postbuild": "npm run build",
+    "render-build": "npm run build"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
