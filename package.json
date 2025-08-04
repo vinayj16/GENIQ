@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test-api": "node test-api.js",
+    "start": "node backend/start-prod.js",
     "start-backend": "cd backend && npm start",
     "start-full": "concurrently \"npm run start-backend\" \"npm run dev\"",
     "setup": "node scripts/setup-env.js",

@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: geniq
+    env: node
+    build:
+      dockerfile: Dockerfile
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: VITE_API_URL
+        value: /api
+      - key: VITE_API_KEY
+        value: prod_geniq_api_key_2024
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        value: https://geniq-mtkc.onrender.com
+    healthCheckPath: /health
+    autoDeploy: true

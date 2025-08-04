@@ -29,9 +29,11 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       proxy: {
         '/api': {
-          target: env.VITE_BACKEND_URL || 'http://localhost:5000',
-          changeOrigin: true,
-          secure: false,
+          target: process.env.NODE_ENV === 'production' 
+        ? 'https://geniq-mtkc.onrender.com' 
+        : 'http://localhost:5000',
+      changeOrigin: true,
+      secure: false,
           configure: (proxy) => {
             proxy.on('error', (err: Error) => {
               // eslint-disable-next-line no-console
@@ -51,12 +53,11 @@ export default defineConfig(({ mode }) => {
       assetsDir: 'assets',
       sourcemap: !isProduction,
       minify: isProduction ? 'terser' : false,
+      target: 'es2015',
+      chunkSizeWarningLimit: 1000,
       rollupOptions: {
         output: {
-          manualChunks: {
-            react: ['react', 'react-dom', 'react-router-dom'],
-            vendor: ['@radix-ui/react-*']
-          }
+          manualChunks: undefined // Disable manual chunking to avoid build issues
         }
       }
     },

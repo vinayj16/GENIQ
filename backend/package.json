@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node start-prod.js",
     "dev": "nodemon server.js",
-    "build": "cd .. && npm install && npm run build && cd backend",
+    "build": "cd .. && node scripts/build-for-render.js",
+    "build:simple": "cd .. && npm install && npm run build && cd backend",
     "build:backend-only": "echo 'No build step required for Node.js backend'",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
