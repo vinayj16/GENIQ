@@ -91,8 +91,8 @@ export const getStorageUsage = () => {
   let totalSize = 0;
   const usage: Record<string, number> = {};
   
-  for (let key in localStorage) {
-    if (localStorage.hasOwnProperty(key)) {
+  for (const key in localStorage) {
+    if (Object.prototype.hasOwnProperty.call(localStorage, key)) {
       const size = localStorage[key].length;
       usage[key] = size;
       totalSize += size;

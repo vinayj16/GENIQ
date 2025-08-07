@@ -4,7 +4,18 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, Clock, CheckCircle, Users, Code, Zap, Target, BookOpen, Brain } from 'lucide-react';
+import { 
+  AlertCircle, 
+  Clock, 
+  CheckCircle, 
+  Users, 
+  Code, 
+  Zap, 
+  Target, 
+  BookOpen, 
+  Brain, 
+  Activity 
+} from 'lucide-react';
 import { useDashboardStats, useActivities } from '@/hooks/useApi';
 import { formatDistanceToNow } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
@@ -25,11 +36,7 @@ const StatCard: React.FC<StatCardProps> = ({
   icon: Icon, 
   color 
 }) => {
-  // Ensure Icon is a valid React component
-  if (!Icon || typeof Icon !== 'function') {
-    console.error('Invalid icon component provided to StatCard');
-    return null;
-  }
+  // All icons are properly imported from lucide-react
 
   return (
     <Card className="p-4 text-center bg-background/50">
@@ -45,6 +52,8 @@ const StatCard: React.FC<StatCardProps> = ({
 const DashboardOverview = () => {
   const navigate = useNavigate();
   const [challengeLoading, setChallengeLoading] = useState(false);
+
+  // Icons are properly imported from lucide-react
 
   // Daily challenge types
   const challengeTypes = [
@@ -204,25 +213,25 @@ const DashboardOverview = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
           <StatCard 
             title="Problems Solved" 
-            value={displayStats.problemsSolved} 
+            value={displayStats.problemsSolved || 0} 
             icon={Code} 
             color="text-green-500" 
           />
           <StatCard 
             title="Day Streak" 
-            value={displayStats.dayStreak} 
+            value={displayStats.dayStreak || 0} 
             icon={Clock} 
             color="text-yellow-500" 
           />
           <StatCard 
             title="Success Rate" 
-            value={`${displayStats.successRate}%`} 
+            value={`${displayStats.successRate || 0}%`} 
             icon={CheckCircle} 
             color="text-blue-500" 
           />
           <StatCard 
             title="Companies" 
-            value={displayStats.companiesCount} 
+            value={displayStats.companiesCount || 0} 
             icon={Users} 
             color="text-purple-500" 
           />

@@ -134,12 +134,13 @@ const WhiteboardSimulator: React.FC<WhiteboardSimulatorProps> = ({
         ctx.stroke();
         break;
       
-      case 'circle':
+      case 'circle': {
         const radius = Math.sqrt(Math.pow(element.width || 0, 2) + Math.pow(element.height || 0, 2)) / 2;
         ctx.beginPath();
         ctx.arc(element.x + (element.width || 0) / 2, element.y + (element.height || 0) / 2, radius, 0, 2 * Math.PI);
         ctx.stroke();
         break;
+      }
       
       case 'text':
         ctx.font = `${element.strokeWidth * 8}px Arial`;

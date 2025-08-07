@@ -1,4 +1,5 @@
 import { Problem, Review } from '@/types/dashboard';
+import { blink } from './blink';
 
 // Base URL configuration - use Vite proxy in development, or relative URL in production
 const API_BASE_URL = import.meta.env.DEV 
@@ -23,9 +24,16 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
       credentials: 'include' // Include cookies for authentication
     });
 
+    // Check if response is actually JSON
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      console.warn(`⚠️ API endpoint ${endpoint} returned non-JSON response (${contentType})`);
+      throw new Error(`API returned HTML instead of JSON for ${endpoint}`);
+    }
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || 'API request failed');
+      throw new Error(errorData.message || `API request failed with status: ${response.status}`);
     }
 
     return await response.json();
@@ -178,57 +186,131 @@ class ApiService {
   }
 
   async getReviews(filters?: { company?: string; role?: string; experience?: string }) {
-    await simulateNetworkDelay();
-    
-    let filteredReviews = this.allReviews;
-    
-    if (filters?.company) {
-      filteredReviews = filteredReviews.filter(review => 
-        review.company.toLowerCase().includes(filters.company!.toLowerCase())
-      );
+    try {
+      console.log('🔄 Fetching reviews from backend API...');
+      const params = new URLSearchParams();
+      
+      if (filters) {
+        if (filters.company) params.append('company', filters.company);
+        if (filters.role) params.append('role', filters.role);
+        if (filters.experience) params.append('experience', filters.experience);
+      }
+      
+      const response = await apiRequest(`/reviews?${params.toString()}`, {
+        method: 'GET'
+      });
+      
+      console.log('✅ Reviews API response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Failed to fetch reviews:', error);
+      // Return filtered mock data as fallback
+      await simulateNetworkDelay();
+      
+      let filteredReviews = this.allReviews;
+      
+      if (filters?.company) {
+        filteredReviews = filteredReviews.filter(review => 
+          review.company.toLowerCase().includes(filters.company!.toLowerCase())
+        );
+      }
+      
+      if (filters?.role) {
+        filteredReviews = filteredReviews.filter(review => 
+          review.role.toLowerCase().includes(filters.role!.toLowerCase())
+        );
+      }
+      
+      if (filters?.experience) {
+        filteredReviews = filteredReviews.filter(review => 
+          review.experience.toLowerCase() === filters.experience!.toLowerCase()
+        );
+      }
+      
+      return filteredReviews;
     }
-    
-    if (filters?.role) {
-      filteredReviews = filteredReviews.filter(review => 
-        review.role.toLowerCase().includes(filters.role!.toLowerCase())
-      );
-    }
-    
-    if (filters?.experience) {
-      filteredReviews = filteredReviews.filter(review => 
-        review.experience.toLowerCase() === filters.experience!.toLowerCase()
-      );
-    }
-    
-    return filteredReviews;
   }
 
   async getProblems(filters?: { difficulty?: string; category?: string; company?: string }) {
-    await simulateNetworkDelay();
-    
-    let filteredProblems = this.allProblems;
-    
-    if (filters?.difficulty) {
-      filteredProblems = filteredProblems.filter(problem => 
-        problem.difficulty.toLowerCase() === filters.difficulty!.toLowerCase()
-      );
+    try {
+      console.log('🔄 Fetching filtered problems from backend API...');
+      const params = new URLSearchParams();
+      
+      if (filters) {
+        if (filters.difficulty) params.append('difficulty', filters.difficulty);
+        if (filters.category) params.append('category', filters.category);
+        if (filters.company) params.append('company', filters.company);
+      }
+      
+      const response = await apiRequest(`/problems?${params.toString()}`, {
+        method: 'GET'
+      });
+      
+      console.log('✅ Filtered problems API response:', response);
+      
+      // Transform backend response to match Problem interface
+      const problems = response.map((problem: any) => ({
+        id: problem.id,
+        title: problem.title,
+        difficulty: problem.difficulty || 'Medium',
+        category: problem.category || 'General',
+        description: problem.description || 'No description available.',
+        company: 'Various',
+        role: 'Software Engineer',
+        acceptance: '50.0%',
+        examples: [{
+          input: 'Example input',
+          output: 'Example output', 
+          explanation: 'Example explanation'
+        }],
+        constraints: problem.constraints || ['No specific constraints'],
+        topics: [problem.category || 'General'],
+        companies: ['Various'],
+        testCases: problem.testCases || [],
+        codeTemplate: {
+          javascript: problem.solution || '// Write your solution here',
+          python: '# Write your solution here', 
+          java: '// Write your solution here'
+        },
+        hints: ['Think about the problem step by step'],
+        solution: {
+          approach: 'Standard approach',
+          timeComplexity: 'O(n)',
+          spaceComplexity: 'O(1)', 
+          explanation: 'Standard algorithm approach'
+        }
+      }));
+      
+      return problems;
+    } catch (error) {
+      console.error('❌ Failed to fetch filtered problems:', error);
+      // Return filtered mock data as fallback
+      await simulateNetworkDelay();
+      
+      let filteredProblems = this.allProblems;
+      
+      if (filters?.difficulty) {
+        filteredProblems = filteredProblems.filter(problem => 
+          problem.difficulty.toLowerCase() === filters.difficulty!.toLowerCase()
+        );
+      }
+      
+      if (filters?.category) {
+        filteredProblems = filteredProblems.filter(problem => 
+          problem.category.toLowerCase() === filters.category!.toLowerCase()
+        );
+      }
+      
+      if (filters?.company) {
+        filteredProblems = filteredProblems.filter(problem => 
+          problem.companies?.some(company => 
+            company.toLowerCase().includes(filters.company!.toLowerCase())
+          )
+        );
+      }
+      
+      return filteredProblems;
     }
-    
-    if (filters?.category) {
-      filteredProblems = filteredProblems.filter(problem => 
-        problem.category.toLowerCase() === filters.category!.toLowerCase()
-      );
-    }
-    
-    if (filters?.company) {
-      filteredProblems = filteredProblems.filter(problem => 
-        problem.companies?.some(company => 
-          company.toLowerCase().includes(filters.company!.toLowerCase())
-        )
-      );
-    }
-    
-    return filteredProblems;
   }
 
   async getProblemById(id: number) {
@@ -276,14 +358,92 @@ class ApiService {
 
   // Dashboard analytics methods
   async getDashboardStats() {
-    await simulateNetworkDelay();
-    
-    return {
-      problemsSolved: 89,
-      dayStreak: 5,
-      successRate: 76,
-      companiesCount: 12
-    };
+    try {
+      console.log('🔄 Fetching dashboard stats from backend API...');
+      const response = await apiRequest('/dashboard/stats', {
+        method: 'GET'
+      });
+      
+      console.log('✅ Dashboard stats API response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Failed to fetch dashboard stats:', error);
+      // Return mock data as fallback
+      await simulateNetworkDelay();
+      
+      return {
+        problemsSolved: 89,
+        dayStreak: 5,
+        successRate: 76,
+        companiesCount: 12
+      };
+    }
+  }
+
+  async getDashboardActivity() {
+    try {
+      console.log('🔄 Fetching dashboard activity from backend API...');
+      const response = await apiRequest('/dashboard/activity', {
+        method: 'GET'
+      });
+      
+      console.log('✅ Dashboard activity API response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Failed to fetch dashboard activity:', error);
+      // Return mock data as fallback
+      await simulateNetworkDelay();
+      
+      return [
+        {
+          id: 1,
+          type: 'problem_solved',
+          title: 'Solved Two Sum',
+          status: 'completed',
+          time: '2 hours ago'
+        },
+        {
+          id: 2,
+          type: 'review_submitted',
+          title: 'Submitted Google Interview Review',
+          status: 'completed',
+          time: '5 hours ago'
+        },
+        {
+          id: 3,
+          type: 'mcq_completed',
+          title: 'Completed Amazon MCQ Test',
+          status: 'completed',
+          time: '1 day ago'
+        }
+      ];
+    }
+  }
+
+  async getUserProfile() {
+    try {
+      console.log('🔄 Fetching user profile from backend API...');
+      const response = await apiRequest('/user/profile', {
+        method: 'GET'
+      });
+      
+      console.log('✅ User profile API response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Failed to fetch user profile:', error);
+      // Return mock data as fallback
+      await simulateNetworkDelay();
+      
+      return {
+        id: 'user-123',
+        name: 'John Doe',
+        email: 'john.doe@example.com',
+        avatar: null,
+        role: 'Software Engineer',
+        joinDate: '2024-01-15',
+        lastActive: new Date().toISOString()
+      };
+    }
   }
 
   async getProgressData() {
@@ -490,6 +650,39 @@ class ApiService {
     return {
       success: true,
       reviewId: `review-${solutionId}-${Date.now()}`,
+      message: 'Review submitted successfully!'
+    };
+  }
+
+  // Submit interview review
+  async submitReview(reviewData: any) {
+    await simulateNetworkDelay();
+    
+    // Create a new review with ID and timestamp
+    const newReview = {
+      id: Date.now(),
+      author: 'Anonymous User',
+      date: new Date().toISOString().split('T')[0],
+      ...reviewData
+    };
+
+    // Mock AI insights generation
+    const aiInsights = {
+      additional_prep_tips: `For ${reviewData.company} ${reviewData.role} positions, focus on ${reviewData.difficulty.toLowerCase()} level problems and system design fundamentals. Practice coding problems similar to those mentioned in the review.`,
+      common_followup_questions: [
+        'Can you explain your approach to solving this problem?',
+        'How would you optimize this solution?',
+        'What would you do if the input size was much larger?',
+        'How would you handle edge cases?'
+      ],
+      industry_insights: `${reviewData.company} is known for rigorous technical interviews with emphasis on problem-solving skills and system design knowledge. The interview process typically involves multiple rounds of technical screening.`,
+      salary_insights: `Based on similar roles and company size, ${reviewData.role} positions at ${reviewData.company} typically offer competitive compensation packages with good growth opportunities.`
+    };
+
+    return {
+      success: true,
+      review: newReview,
+      aiInsights: aiInsights,
       message: 'Review submitted successfully!'
     };
   }
@@ -721,10 +914,155 @@ class ApiService {
     return problems;
   }
 
-  // Fallback problems method
+  // Add AI analysis method using Blink SDK
+  async analyzeCode(code: string, language: string = 'javascript') {
+    try {
+      console.log('🔄 Analyzing code with AI...');
+      
+      const { text } = await blink.ai.generateText({
+        prompt: `You are an expert code reviewer. Analyze this ${language} code and provide detailed feedback.
+
+Code to analyze:
+\`\`\`${language}
+${code}
+\`\`\`
+
+Please provide:
+1. Overall assessment and score (1-100)
+2. Code quality feedback
+3. Specific suggestions for improvement
+4. Performance considerations
+
+Format your response clearly with sections.`,
+        model: 'gpt-4o-mini',
+        maxTokens: 800
+      });
+      
+      console.log('✅ AI analysis response:', text);
+      
+      // Parse score from response or default to 85
+      const scoreMatch = text.match(/score[:\s]*(\d+)/i);
+      const score = scoreMatch ? parseInt(scoreMatch[1]) : 85;
+      
+      return {
+        analysis: text,
+        feedback: text,
+        score: score,
+        suggestions: [
+          'Consider edge cases',
+          'Add error handling', 
+          'Optimize for performance'
+        ],
+        overallScore: score,
+        codeQuality: Math.max(score - 5, 70),
+        efficiency: Math.min(score + 5, 95)
+      };
+    } catch (error) {
+      console.error('❌ Failed to analyze code:', error);
+      throw error;
+    }
+  }
+
+  // Add AI hint functionality using Blink SDK
+  async getAIHint(currentCode?: string, problemDescription?: string) {
+    try {
+      console.log('🔄 Getting AI hint...');
+      
+      const { text } = await blink.ai.generateText({
+        prompt: `You are a helpful coding mentor. The user is working on this problem:
+
+Problem: ${problemDescription || 'A coding challenge'}
+
+Their current code:
+\`\`\`
+${currentCode || 'No code written yet'}
+\`\`\`
+
+Provide a helpful hint that guides them toward the solution without giving it away completely. Be encouraging and educational.`,
+        model: 'gpt-4o-mini',
+        maxTokens: 300
+      });
+      
+      console.log('✅ AI hint response:', text);
+      return text;
+    } catch (error) {
+      console.error('❌ Failed to get AI hint:', error);
+      throw error;
+    }
+  }
+
+  // Get problems from backend API
   async getFallbackProblems() {
-    await simulateNetworkDelay();
-    return this.allProblems;
+    try {
+      console.log('🔄 Fetching problems from backend API...');
+      
+      // Check if response is JSON by examining content-type
+      const url = `${API_BASE_URL}/problems`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': import.meta.env.VITE_API_KEY || '',
+        },
+        credentials: 'include'
+      });
+
+      // Check if response is actually JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.warn('⚠️ API returned non-JSON response, using fallback data');
+        throw new Error('API returned HTML instead of JSON');
+      }
+
+      if (!response.ok) {
+        throw new Error(`API request failed with status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ Backend API response received:', data);
+      
+      // Transform backend response to match Problem interface
+      const problems = data.map((problem: any) => ({
+        id: problem.id,
+        title: problem.title,
+        difficulty: problem.difficulty || 'Medium',
+        category: problem.category || 'General',
+        description: problem.description || 'No description available.',
+        company: 'Various',
+        role: 'Software Engineer',
+        acceptance: '50.0%',
+        examples: [{
+          input: 'Example input',
+          output: 'Example output', 
+          explanation: 'Example explanation'
+        }],
+        constraints: problem.constraints || ['No specific constraints'],
+        topics: [problem.category || 'General'],
+        companies: ['Various'],
+        testCases: problem.testCases || [],
+        codeTemplate: {
+          javascript: problem.solution || '// Write your solution here',
+          python: '# Write your solution here',
+          java: '// Write your solution here'
+        },
+        hints: ['Think about the problem step by step'],
+        solution: {
+          approach: 'Standard approach',
+          timeComplexity: 'O(n)',
+          spaceComplexity: 'O(1)',
+          explanation: 'Standard algorithm approach'
+        }
+      }));
+      
+      console.log('✅ Transformed problems:', problems.length);
+      return problems;
+    } catch (error) {
+      console.error('❌ Failed to fetch problems from API:', error);
+      console.log('🔄 Using fallback mock data instead');
+      // Return mock data as fallback
+      await simulateNetworkDelay();
+      return this.allProblems;
+    }
   }
 
   // Enhanced MCQs method

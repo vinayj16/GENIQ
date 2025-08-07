@@ -1,6 +1,5 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react-swc';
-import type { UserConfig } from 'vite';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 
@@ -14,9 +13,11 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const isProduction = mode === 'production';
   
-  // Log environment for debugging
-  console.log('Vite Mode:', mode);
-  console.log('API URL:', env.VITE_API_URL);
+  // Log environment for debugging (only in development)
+  if (mode === 'development') {
+    console.log('Vite Mode:', mode);
+    console.log('API URL:', env.VITE_API_URL);
+  }
   
   return {
     plugins: [react()],
@@ -33,26 +34,30 @@ export default defineConfig(({ mode }) => {
       host: true,
       proxy: {
         '/api': {
-          target: isProduction 
-            ? 'https://geniq-ou4a.onrender.com' 
-            : 'http://localhost:10000',
+          target: 'https://geniq-ou4a.onrender.com',
           changeOrigin: true,
-          secure: false,
+          secure: true,
           ws: true,
+          headers: {
+            'X-API-Key': 'prod_geniq_api_key_2024',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'X-Requested-With, content-type, Authorization, X-API-Key'
+          },
           configure: (proxy) => {
             proxy.on('error', (err: Error) => {
               console.error('Proxy error:', err);
             });
             proxy.on('proxyReq', (proxyReq) => {
               console.log('Sending request to:', proxyReq.path);
-              // Add any required headers for your API
-              proxyReq.setHeader('x-powered-by', 'Vite');
+              // Add API key header for production API
+              proxyReq.setHeader('X-API-Key', 'prod_geniq_api_key_2024');
             });
             proxy.on('proxyRes', (proxyRes) => {
               console.log('Received response with status:', proxyRes.statusCode);
             });
-          },
-          pathRewrite: (path: string): string => path.replace(/^\/api/, '')
+          }
+          // Remove pathRewrite - keep /api in the path
         }
       }
     },

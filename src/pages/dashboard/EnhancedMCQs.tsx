@@ -1,6 +1,4 @@
-/** @jsxImportSource react */
-import * as React from 'react';
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,8 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
-import { apiService } from '@/lib/api';
+import { Clock, CheckCircle, XCircle, RotateCcw, Play, BookOpen, Search } from 'lucide-react';
 
 interface MCQ {
   id: string | number;
@@ -21,478 +18,376 @@ interface MCQ {
   difficulty: string;
   company: string;
   role?: string;
-  showExplanation?: boolean;
-  userAnswer?: number | null;
-}
-
-interface MCQ {
-  id: string | number;
-  question: string;
-  options: string[];
-  correct: number;
-  explanation: string;
-  category: string;
-  difficulty: string;
-  company: string;
-  role?: string;
-  showExplanation?: boolean;
   userAnswer?: number | null;
 }
 
 const EnhancedMCQs: React.FC = () => {
-  // State for form inputs
-  const [companyInput, setCompanyInput] = useState<string>('');
-  const [roleInput, setRoleInput] = useState<string>('');
+  // User input state
+  const [company, setCompany] = useState<string>('');
+  const [role, setRole] = useState<string>('');
+  const [category, setCategory] = useState<string>('all');
+  const [difficulty, setDifficulty] = useState<string>('all');
+  const [limit, setLimit] = useState<number>(20);
 
-  // State for filters
-  const [filters, setFilters] = useState({
-    category: 'all',
-    difficulty: 'all',
-    limit: 10
-  });
-
-  // State for MCQs and test flow
+  // MCQ state
   const [mcqs, setMcqs] = useState<MCQ[]>([]);
-  const [currentQuestion, setCurrentQuestion] = useState<number>(0);
-  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
-  const [userAnswers, setUserAnswers] = useState<(number | null)[]>([]);
-  const [score, setScore] = useState<number>(0);
-  const [submitted, setSubmitted] = useState<boolean>(false);
-  const [showResult, setShowResult] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
+  
+  // Test state
   const [testStarted, setTestStarted] = useState<boolean>(false);
-  const [learningMode, setLearningMode] = useState<boolean>(true);
-  const [timeLeft, setTimeLeft] = useState<number>(1800); // 30 minutes in seconds
+  const [testCompleted, setTestCompleted] = useState<boolean>(false);
+  const [currentQuestion, setCurrentQuestion] = useState<number>(0);
+  const [userAnswers, setUserAnswers] = useState<(number | null)[]>([]);
+  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
+  const [showExplanation, setShowExplanation] = useState<boolean>(false);
+  const [learningMode] = useState<boolean>(false);
+  
+  // Timer state
+  const [timeLeft, setTimeLeft] = useState<number>(1800); // 30 minutes
   const [timerActive, setTimerActive] = useState<boolean>(false);
+  
+  // Results state
+  const [score, setScore] = useState<number>(0);
+  const [showResults, setShowResults] = useState<boolean>(false);
 
-  // Helper function to calculate score
-  const calculateScore = (answers: (number | null)[], questions: MCQ[]): number => {
-    return answers.reduce((acc, answer, index) => {
-      return answer === questions[index]?.correct ? acc + 1 : acc;
-    }, 0);
-  };
-
-  // Handle answer selection
-  const handleAnswerSelect = (answerIndex: number) => {
-    if (submitted || !testStarted) return;
-    
-    const newAnswers = [...userAnswers];
-    newAnswers[currentQuestion] = answerIndex;
-    setUserAnswers(newAnswers);
-    setSelectedAnswer(answerIndex);
-    
-    if (learningMode) {
-      // In learning mode, show explanation immediately
-      const updatedMcqs = [...mcqs];
-      updatedMcqs[currentQuestion] = {
-        ...updatedMcqs[currentQuestion],
-        showExplanation: true,
-        userAnswer: answerIndex
-      };
-      setMcqs(updatedMcqs);
-    }
-  };
-
-  // Move to next question
-  const nextQuestion = () => {
-    if (currentQuestion < mcqs.length - 1) {
-      setCurrentQuestion(prev => prev + 1);
-      setSelectedAnswer(userAnswers[currentQuestion + 1] ?? null);
-    }
-  };
-
-  // Move to previous question
-  const prevQuestion = () => {
-    if (currentQuestion > 0) {
-      setCurrentQuestion(prev => prev - 1);
-      setSelectedAnswer(userAnswers[currentQuestion - 1] ?? null);
-    }
-  };
-
-  // Submit test
-  const submitTest = () => {
-    const finalScore = calculateScore(userAnswers, mcqs);
-    setScore(finalScore);
-    setSubmitted(true);
-    setShowResult(true);
-    setTimerActive(false);
-  };
-
-  // Reset test
-  const resetTest = () => {
-    setMcqs(prev => prev.map(mcq => ({
-      ...mcq,
-      showExplanation: false,
-      userAnswer: null
-    })));
-    setUserAnswers(new Array(mcqs.length).fill(null));
-    setCurrentQuestion(0);
-    setSelectedAnswer(null);
-    setSubmitted(false);
-    setShowResult(false);
-    setScore(0);
-    setTimeLeft(1800);
-    setTestStarted(false);
-    setLearningMode(true);
-  };
-
+  // Timer effect
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-
+    let interval: NodeJS.Timeout;
     if (timerActive && timeLeft > 0) {
-      timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
-    } else if (timeLeft === 0 && testStarted) {
-      finishTest();
+      interval = setInterval(() => {
+        setTimeLeft(prev => {
+          if (prev <= 1) {
+            handleFinishTest();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
     }
+    return () => clearInterval(interval);
+  }, [timerActive, timeLeft]);
 
-    return () => clearTimeout(timer);
-  }, [timeLeft, timerActive, testStarted]);
-
-  useEffect(() => {
-    if (mcqs.length > 0 && !showResult) {
-      const allAnswered = userAnswers.every(answer => answer !== null);
-      if (allAnswered && userAnswers.length > 0) {
-        const timer = setTimeout(() => {
-          finishTest();
-        }, 1000);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [userAnswers, mcqs, showResult]);
-
-  const startLearning = () => {
-    setLearningMode(true);
-    setTestStarted(true);
-    setTimerActive(false);
-    setShowResult(false);
-    setSubmitted(false);
-  };
-
-  const startTest = () => {
-    if (mcqs.length === 0) {
-      toast.error('No questions available. Please fetch questions first.');
+  // Fetch MCQs from API based on user input
+  const fetchMCQs = async () => {
+    if (!company.trim()) {
+      toast.error('Please enter a company name');
       return;
     }
 
-    setTestStarted(true);
-    setLearningMode(false);
-    setTimeLeft(1800); // 30 minutes
-    setTimerActive(true);
-    setShowResult(false);
-    setSubmitted(false);
-
-    // Reset user answers for test mode
-    setUserAnswers(new Array(mcqs.length).fill(null));
-    setCurrentQuestion(0);
-    setScore(0);
-  };
-
-  const fetchMCQs = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-
       // Build query parameters
       const params = new URLSearchParams();
-      if (companyInput) params.append('company', companyInput);
-      if (roleInput) params.append('role', roleInput);
-      if (filters.category !== 'all') params.append('category', filters.category);
-      if (filters.difficulty !== 'all') params.append('difficulty', filters.difficulty);
-      if (filters.limit) params.append('limit', filters.limit.toString());
+      params.append('company', company);
+      if (role) params.append('role', role);
+      if (category !== 'all') params.append('category', category);
+      if (difficulty !== 'all') params.append('difficulty', difficulty);
+      params.append('limit', limit.toString());
 
-      // Call the API service to fetch MCQs
-      const fetchedMCQs = await apiService.getMCQs({
-        company: companyInput,
-        category: filters.category !== 'all' ? filters.category : undefined,
-        difficulty: filters.difficulty !== 'all' ? filters.difficulty : undefined,
-        limit: filters.limit
+      console.log('🔍 Fetching MCQs with params:', Object.fromEntries(params));
+
+      // Make API request with authentication - use /api/mcqs for both dev and prod
+      const apiUrl = '/api/mcqs';
+      const apiKey = import.meta.env.VITE_API_KEY || 'prod_geniq_api_key_2024';
+      
+      const response = await fetch(`${apiUrl}?${params.toString()}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': apiKey
+        }
       });
 
-      if (fetchedMCQs.length === 0) {
-        toast.info('No MCQs found for the selected filters. Try different criteria.');
+      if (!response.ok) {
+        let errorMessage = `HTTP ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+        } catch (e) {
+          console.error('Error parsing error response:', e);
+        }
+        throw new Error(errorMessage);
+      }
+
+      const apiMCQs = await response.json();
+      console.log('✅ Received MCQs from API:', apiMCQs.length, 'questions');
+
+      if (!Array.isArray(apiMCQs) || apiMCQs.length === 0) {
+        toast.warning('No MCQs found for your criteria. Try different filters.');
+        setMcqs([]);
         return;
       }
 
-      // Transform the response to match our MCQ interface
-      const formattedMCQs: MCQ[] = fetchedMCQs.map((mcq: any) => ({
-        id: mcq.id || Math.random().toString(36).substr(2, 9),
-        question: mcq.question || 'Sample question',
-        options: Array.isArray(mcq.options) ? mcq.options : ['Option 1', 'Option 2', 'Option 3', 'Option 4'],
-        correct: typeof mcq.correct === 'number' ? mcq.correct : 0,
-        explanation: mcq.explanation || 'No explanation available',
-        category: mcq.category || 'General',
-        difficulty: mcq.difficulty || 'Medium',
-        company: mcq.company || 'General',
-        role: mcq.role || '',
-        showExplanation: false,
-        userAnswer: null
-      }));
+      // Transform API response with type safety
+      const transformedMCQs: MCQ[] = apiMCQs.map((mcq: any, index: number) => {
+        // Ensure we have valid options and correct answer
+        const options = Array.isArray(mcq.options) ? mcq.options : [];
+        const correctAnswer = typeof mcq.correct === 'number' && 
+                            mcq.correct >= 0 && 
+                            mcq.correct < options.length 
+                   ? mcq.correct 
+                            : 0;
+                            
+        return {
+          id: mcq.id || `mcq-${index + 1}`,
+          question: mcq.question || 'Question not available',
+          options: options,
+          correct: correctAnswer,
+          explanation: mcq.explanation || 'No explanation provided',
+          category: mcq.category || 'General',
+          difficulty: mcq.difficulty || difficulty || 'Medium',
+          company: mcq.company || company,
+          role: mcq.role || role || 'Software Engineer',
+          userAnswer: null
+        };
+      });
 
-      // Update state with the fetched and formatted MCQs
-      setMcqs(formattedMCQs);
+      // Set MCQs and reset test state
+      setMcqs(transformedMCQs);
+      setUserAnswers(new Array(transformedMCQs.length).fill(null));
       setCurrentQuestion(0);
       setSelectedAnswer(null);
-      setUserAnswers(new Array(formattedMCQs.length).fill(null));
+      setShowExplanation(false);
+      setTestStarted(false);
+      setTestCompleted(false);
+      setShowResults(false);
       setScore(0);
-      setSubmitted(false);
-      setShowResult(false);
 
-      // Start in learning mode with the first question
-      setLearningMode(true);
-      setTestStarted(true);
-      setTimerActive(false);
-
-      toast.success(`Fetched ${formattedMCQs.length} MCQs`);
-    } catch (error) {
-      console.error('Error fetching MCQs:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to fetch MCQs. Please try again later.');
+      toast.success(`🎉 Loaded ${transformedMCQs.length} MCQs for ${company}! Ready to start test.`);
+    } catch (error: any) {
+      console.error('❌ Failed to fetch MCQs:', error);
+      toast.error(`Failed to fetch MCQs: ${error.message}`);
+      setMcqs([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Initialize test with fetched questions
-  const initializeTest = () => {
+  // Start the test
+  const handleStartTest = () => {
     if (mcqs.length === 0) {
-      alert('No questions available. Please fetch questions first.');
-      return false;
+      toast.error('Please fetch MCQs first');
+      return;
     }
+
     setTestStarted(true);
-    setScore(0);
+    // RestCompleted(false);
+    setCurrentQuestion(0);
     setUserAnswers(new Array(mcqs.length).fill(null));
-    setCurrentQuestion(0);
     setSelectedAnswer(null);
-    setShowResult(false);
-    setSubmitted(false);
-    setTimeLeft(1800);
-    return true;
-  };
-
-  const handleAnswer = (questionIndex: number, answerIndex: number) => {
-    if (submitted || !testStarted) return;
-
-    const newAnswers = [...userAnswers];
-    newAnswers[questionIndex] = answerIndex;
-    setUserAnswers(newAnswers);
-
-    // Update the MCQ with the user's answer and show explanation in learning mode
-    setMcqs(prevMcqs =>
-      prevMcqs.map((mcq, i) => {
-        if (i === questionIndex) {
-          const updatedMcq = {
-            ...mcq,
-            userAnswer: answerIndex,
-            isCorrect: answerIndex === mcq.correct
-          };
-
-          // In learning mode, show explanation immediately
-          if (learningMode) {
-            updatedMcq.showExplanation = true;
-          }
-
-          return updatedMcq;
-        }
-        return mcq;
-      })
-    );
-
-    // In learning mode, move to next question after a short delay
-    if (learningMode && questionIndex < mcqs.length - 1) {
-      setTimeout(() => {
-        setCurrentQuestion(prev => Math.min(prev + 1, mcqs.length - 1));
-      }, 1000);
-    }
-  };
-
-  const finishTest = () => {
-    if (!submitted && mcqs.length > 0) {
-      // Ensure all unanswered questions are marked as incorrect
-      const finalUserAnswers = [...userAnswers];
-      let correctCount = 0;
-
-      // Calculate score and update answers
-      const updatedMcqs = mcqs.map((mcq, index) => {
-        const userAnswer = finalUserAnswers[index];
-        const isCorrect = userAnswer === mcq.correct;
-
-        if (userAnswer === null) {
-          finalUserAnswers[index] = -1; // Mark as unanswered
-        } else if (isCorrect) {
-          correctCount++;
-        }
-
-        return {
-          ...mcq,
-          userAnswer,
-          isCorrect,
-          showExplanation: true // Show explanations in results
-        };
-      });
-
-      // Update state
-      setMcqs(updatedMcqs);
-      setUserAnswers(finalUserAnswers);
-      setScore(Math.round((correctCount / mcqs.length) * 100));
-      setSubmitted(true);
-      setShowResult(true);
-      setTimerActive(false);
-
-      // Save test results
-      const testResults = {
-        id: Date.now(),
-        date: new Date().toISOString(),
-        company: companyInput || 'Demo Company',
-        role: roleInput || 'Senior Developer',
-        totalQuestions: mcqs.length,
-        correctAnswers: correctCount,
-        score: Math.round((correctCount / mcqs.length) * 100),
-        timeSpent: 1800 - timeLeft,
-        questions: updatedMcqs.map((q, i) => ({
-          question: q.question,
-          userAnswer: finalUserAnswers[i],
-          correctAnswer: q.correct,
-          isCorrect: finalUserAnswers[i] === q.correct,
-          explanation: q.explanation
-        }))
-      };
-
-      // Save to localStorage
-      const previousResults = JSON.parse(localStorage.getItem('testResults') || '[]');
-      localStorage.setItem('testResults', JSON.stringify([...previousResults, testResults]));
-
-      // Show success message
-      toast.success(`Test submitted! Your score: ${Math.round((correctCount / mcqs.length) * 100)}%`);
-
-      // Scroll to results
-      setTimeout(() => {
-        const resultsSection = document.getElementById('results-section');
-        if (resultsSection) {
-          resultsSection.scrollIntoView({ behavior: 'smooth' });
-        }
-      }, 100);
-    }
-  };
-
-  const resetQuiz = () => {
-    setMcqs([]);
-    setCurrentQuestion(0);
-    setSelectedAnswer(null);
-    setShowResult(false);
-    setTestStarted(false);
-    setSubmitted(false);
-    setTimeLeft(1800);
+    setShowExplanation(false);
+    setTimeLeft(1800); // 30 minutes
+    setTimerActive(true);
     setScore(0);
-    setUserAnswers([]);
-    setCompanyInput('');
-    setRoleInput('');
-    setFilters({
-      category: 'all',
-      difficulty: 'all',
-      limit: 10
+    setShowResults(false);
+
+    toast.success(`🚀 Test started! ${mcqs.length} questions, 30 minutes to complete.`);
+  };
+
+  // Handle answer selection with proper TypeScript types
+  const handleAnswer = (questionIndex: number, answerIndex: number): void => {
+    if (testCompleted) return;
+    
+    // Update user's answer with proper type safety
+    setUserAnswers(prevAnswers => {
+      const newAnswers = [...prevAnswers];
+      newAnswers[questionIndex] = answerIndex;
+      return newAnswers;
     });
+    
+    // Update selected answer for the current question
+    setSelectedAnswer(answerIndex);
+    
+    // In learning mode, show explanation immediately
+    if (learningMode) {
+      setShowExplanation(true);
+    }
   };
 
-  const clearResults = () => {
+  // Navigate to next question
+  const handleNextQuestion = () => {
+    if (currentQuestion < mcqs.length - 1) {
+      setCurrentQuestion(prev => prev + 1);
+      setSelectedAnswer(userAnswers[currentQuestion + 1]);
+      setShowExplanation(false);
+    }
+  };
+
+  // Navigate to previous question
+  const handlePreviousQuestion = () => {
+    if (currentQuestion > 0) {
+      setCurrentQuestion(prev => prev - 1);
+      setSelectedAnswer(userAnswers[currentQuestion - 1]);
+      setShowExplanation(false);
+    }
+  };
+
+  // Show explanation for current question
+  const handleShowExplanation = () => {
+    setShowExplanation(true);
+  };
+
+  // Finish the test and show results
+  const handleFinishTest = () => {
+    setTestCompleted(true);
+    setTimerActive(false);
+    setShowResults(true);
+
+    // Calculate score
+    const correctAnswers = userAnswers.reduce((count, answer, index) => {
+      return answer === mcqs[index]?.correct ? count + 1 : count;
+    }, 0);
+
+    const finalScore = Math.round((correctAnswers / mcqs.length) * 100);
+    setScore(finalScore);
+
+    // Save test results
+    const testResults = {
+      id: Date.now(),
+      date: new Date().toISOString(),
+      company: company,
+      role: role || 'Software Engineer',
+      category: category,
+      difficulty: difficulty,
+      totalQuestions: mcqs.length,
+      correctAnswers: correctAnswers,
+      incorrectAnswers: mcqs.length - correctAnswers,
+      unansweredQuestions: userAnswers.filter(a => a === null).length,
+      score: finalScore,
+      timeSpent: 1800 - timeLeft,
+      timeSpentMinutes: Math.floor((1800 - timeLeft) / 60),
+      timeSpentSeconds: (1800 - timeLeft) % 60,
+      questions: mcqs.map((q, i) => ({
+        id: q.id,
+        question: q.question,
+        options: q.options,
+        userAnswer: userAnswers[i],
+        correctAnswer: q.correct,
+        isCorrect: userAnswers[i] === q.correct,
+        explanation: q.explanation
+      }))
+    };
+
+    // Save to localStorage
+    const previousResults = JSON.parse(localStorage.getItem('mcqTestResults') || '[]');
+    localStorage.setItem('mcqTestResults', JSON.stringify([...previousResults, testResults]));
+
+    toast.success(`🎯 Test completed! Score: ${correctAnswers}/${mcqs.length} (${finalScore}%)`);
+  };
+
+  // Reset everything
+  const handleReset = () => {
     setMcqs([]);
-    setShowResult(false);
     setTestStarted(false);
+    setTestCompleted(false);
+    setCurrentQuestion(0);
     setUserAnswers([]);
+    setSelectedAnswer(null);
+    setShowExplanation(false);
+    setTimeLeft(1800);
+    setTimerActive(false);
     setScore(0);
-    setCompanyInput('');
-    setRoleInput('');
-    resetQuiz();
+    setShowResults(false);
+    setCompany('');
+    setRole('');
+    setCategory('all');
+    setDifficulty('all');
+    setLimit(20);
+
+    toast.info('Reset complete. Ready for new MCQs!');
   };
 
-  const formatTime = (seconds: number) => {
+  // Format time display
+  const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case 'Easy': return 'bg-success/20 text-success border-success/30';
-      case 'Medium': return 'bg-warning/20 text-warning border-warning/30';
-      case 'Hard': return 'bg-destructive/20 text-destructive border-destructive/30';
-      default: return 'bg-muted/20 text-muted-foreground border-muted/30';
-    }
-  };
-
-  const answeredCount = userAnswers.filter(a => a !== null).length;
-  const progress = mcqs.length > 0 ? Math.round((answeredCount / mcqs.length) * 100) : 0;
-  const timeLeftFormatted = formatTime(timeLeft);
+  // Calculate progress
+  const progress = mcqs.length > 0 ? ((currentQuestion + 1) / mcqs.length) * 100 : 0;
+  const answeredCount = userAnswers.filter(answer => answer !== null).length;
 
   return (
-    <div className="container mx-auto p-4">
+    <div className="container mx-auto p-4 max-w-4xl">
       <div className="space-y-6">
         {/* Header */}
-        <div className="card-glow p-6 bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/10 rounded-xl">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent mb-2">
-            📝 MCQ Practice
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 p-6 rounded-xl border border-blue-200 dark:border-blue-800">
+          <h1 className="text-3xl font-bold text-blue-900 dark:text-blue-100 mb-2">
+            📝 MCQ Practice Test
           </h1>
-          <p className="text-muted-foreground">Test your knowledge with company-specific questions</p>
-
-          {mcqs.length > 0 && !showResult && (
+          <p className="text-blue-700 dark:text-blue-300">
+            Test your knowledge with company-specific multiple choice questions
+          </p>
+          
+          {testStarted && !showResults && (
             <div className="mt-4 space-y-2">
-              <div className="flex justify-between text-sm text-muted-foreground">
+              <div className="flex justify-between text-sm text-blue-600 dark:text-blue-400">
                 <span>Progress: {answeredCount}/{mcqs.length} answered</span>
-                <span>⏱️ {timeLeftFormatted} remaining</span>
+                <span className="flex items-center gap-1">
+                  <Clock className="w-4 h-4" />
+                  {formatTime(timeLeft)} remaining
+                </span>
               </div>
               <Progress value={progress} className="h-2" />
             </div>
           )}
         </div>
 
-        {/* Input Section */}
-        {!testStarted && !showResult && (
-          <Card className="card-elevated p-6 border border-border/50 shadow-sm">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                </svg>
+        {/* Input Section - Only show when not in test */}
+        {!testStarted && !showResults && (
+          <Card className="p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                <Search className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               </div>
-              <h3 className="text-xl font-semibold">Test Configuration</h3>
+              <h2 className="text-xl font-semibold">Configure Your Test</h2>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
               <div>
                 <label className="block text-sm font-medium mb-2">Company Name *</label>
                 <Input
                   placeholder="e.g., Google, Amazon, Microsoft"
-                  value={companyInput}
-                  onChange={(e) => setCompanyInput(e.target.value)}
-                  className="input-premium"
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value)}
+                  className="w-full"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Role *</label>
+              
+              <div>sis = await .analyzeMCQPerformance(analysisData);
+                <label className="block text-sm font-medium mb-2">Role</label>
                 <Input
-                  placeholder="e.g., Software Engineer, Data Scientist"
-                  value={roleInput}
-                  onChange={(e) => setRoleInput(e.target.value)}
-                  className="input-premium"
+                  placeholder="e.g., Software Engineer"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="w-full"
                 />
               </div>
+
               <div>
                 <label className="block text-sm font-medium mb-2">Category</label>
-                <Select value={filters.category} onValueChange={(value) => setFilters({ ...filters, category: value })}>
-                  <SelectTrigger className="input-premium">
-                    <SelectValue placeholder="All Categories" />
+                <Select value={category} onValueChange={setCategory}>
+                  <SelectTrigger>
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Categories</SelectItem>
                     <SelectItem value="algorithms">Algorithms</SelectItem>
+                    <SelectItem value="data-structures">Data Structures</SelectItem>
                     <SelectItem value="system-design">System Design</SelectItem>
-                    <SelectItem value="databases">Databases</SelectItem>
-                    <SelectItem value="programming">Programming</SelectItem>
-                    <SelectItem value="behavioral">Behavioral</SelectItem>
+                    <SelectItem value="javascript">JavaScript</SelectItem>
+                    <SelectItem value="python">Python</SelectItem>
+                    <SelectItem value="java">Java</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
               <div>
                 <label className="block text-sm font-medium mb-2">Difficulty</label>
-                <Select value={filters.difficulty} onValueChange={(value) => setFilters({ ...filters, difficulty: value })}>
-                  <SelectTrigger className="input-premium">
-                    <SelectValue placeholder="All Levels" />
+                <Select value={difficulty} onValueChange={setDifficulty}>
+                  <SelectTrigger>
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Levels</SelectItem>
@@ -502,299 +397,327 @@ const EnhancedMCQs: React.FC = () => {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-            <div className="flex gap-3">
-              <div className="w-full flex flex-col sm:flex-row gap-3">
-                <Button
-                  className="flex-1 btn-hero"
-                  onClick={async () => {
-                    await fetchMCQs();
-                    if (mcqs.length > 0) {
-                      initializeTest();
-                    }
-                  }}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <>
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Loading...
-                    </>
-                  ) : (
-                    `Fetch & Start Test (${mcqs.length > 0 ? mcqs.length + ' questions' : ''})`
-                  )}
-                </Button>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Number of Questions</label>
+                <Select value={limit.toString()} onValueChange={(value) => setLimit(parseInt(value))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5 Questions</SelectItem>
+                    <SelectItem value="10">10 Questions</SelectItem>
+                    <SelectItem value="15">15 Questions</SelectItem>
+                    <SelectItem value="20">20 Questions</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              {showResult && (
-                <Button onClick={clearResults} variant="outline" className="btn-premium">
-                  🗑️ Clear Results
+            </div>
+
+            <div className="flex gap-3">
+              <Button 
+                onClick={fetchMCQs} 
+                disabled={loading || !company.trim()}
+                className="flex items-center gap-2"
+              >
+                <Search className="w-4 h-4" />
+                {loading ? 'Fetching...' : 'Fetch MCQs'}
+              </Button>
+              
+              {mcqs.length > 0 && (
+                <Button 
+                  onClick={handleStartTest}
+                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+                >
+                  <Play className="w-4 h-4" />
+                  Start Test ({mcqs.length} Questions)
                 </Button>
               )}
             </div>
           </Card>
         )}
 
-        {/* Questions List */}
-        {mcqs.length > 0 && !showResult && (
-          <Card className="card-elevated p-6 border border-border/50 shadow-sm">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-4 border-b border-border/50">
+        {/* MCQ Preview - Show when MCQs are loaded but test not started */}
+        {mcqs.length > 0 && !testStarted && !showResults && (
+          <Card className="p-6">
+            <div className="flex justify-between items-center mb-6">
               <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-medium text-foreground/90">{companyInput}</span>
-                  <span className="text-muted-foreground">•</span>
-                  <span className="text-sm text-muted-foreground">{roleInput}</span>
-                </div>
-                <div className="flex items-center gap-3 text-sm">
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
-                    {mcqs.length} {mcqs.length === 1 ? 'Question' : 'Questions'}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="10"></circle>
-                      <polyline points="12 6 12 12 16 14"></polyline>
-                    </svg>
-                    {timeLeftFormatted} remaining
-                  </span>
-                </div>
+                <h3 className="text-xl font-semibold text-green-700 dark:text-green-300">
+                  📚 MCQ Preview - {mcqs.length} Questions Loaded
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Review the questions and explanations below, then start the test when ready
+                </p>
               </div>
-              <Button
-                onClick={finishTest}
-                variant="default"
-                className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white shadow-md shadow-primary/20"
-                disabled={userAnswers.every(a => a === null)}
+              
+              <Button 
+                onClick={handleStartTest}
+                className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
-                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                  <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                </svg>
-                Submit All Answers
+                <Play className="w-4 h-4" />
+                Start Test Mode
               </Button>
             </div>
 
-            {mcqs.map((mcq, questionIndex) => (
-              <div key={mcq.id || questionIndex} className="group relative p-5 rounded-xl border border-border/50 hover:border-primary/30 transition-colors mb-6">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className={getDifficultyColor(mcq.difficulty)}>
-                      {mcq.difficulty}
-                    </Badge>
-                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 hover:bg-primary/20">
-                      {mcq.category}
-                    </Badge>
-                  </div>
-                  <div className="flex-1">
-                    {userAnswers[questionIndex] !== null && (
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded-full">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M20 6L9 17l-5-5" />
-                        </svg>
-                        Answered
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-xs font-medium text-muted-foreground">
-                    Question {questionIndex + 1} of {mcqs.length}
-                  </span>
-                </div>
-
-                <h4 className="text-lg font-semibold mb-4 text-foreground/90">{mcq.question}</h4>
-
-                {/* Answer Options */}
-                <div className="space-y-3 mb-4">
-                  {mcq.options && mcq.options.map((option, optionIndex) => {
-                    const isSelected = userAnswers[questionIndex] === optionIndex;
-                    const isCorrect = optionIndex === mcq.correct;
-                    const showResult = submitted || (learningMode && userAnswers[questionIndex] !== null);
-
-                    let optionClass = "p-4 rounded-lg border cursor-pointer transition-all duration-200 hover:border-primary/50";
-
-                    if (showResult) {
-                      if (isCorrect) {
-                        optionClass += " bg-green-50 border-green-500 text-green-800 dark:bg-green-900/30 dark:border-green-400 dark:text-green-200";
-                      } else if (isSelected && !isCorrect) {
-                        optionClass += " bg-red-50 border-red-500 text-red-800 dark:bg-red-900/30 dark:border-red-400 dark:text-red-200";
-                      } else {
-                        optionClass += " bg-muted/30 border-border";
-                      }
-                    } else if (isSelected) {
-                      optionClass += " bg-primary/10 border-primary text-primary";
-                    } else {
-                      optionClass += " bg-background border-border hover:bg-muted/50";
-                    }
-
-                    return (
-                      <div
-                        key={optionIndex}
-                        className={optionClass}
-                        onClick={() => !submitted && handleAnswer(questionIndex, optionIndex)}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="flex-shrink-0">
-                            <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${showResult && isCorrect
-                              ? 'border-green-500 bg-green-500'
-                              : showResult && isSelected && !isCorrect
-                                ? 'border-red-500 bg-red-500'
-                                : isSelected
-                                  ? 'border-primary bg-primary'
-                                  : 'border-muted-foreground'
-                              }`}>
-                              {showResult && isCorrect && (
-                                <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                </svg>
-                              )}
-                              {showResult && isSelected && !isCorrect && (
-                                <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                                </svg>
-                              )}
-                              {isSelected && !showResult && (
-                                <div className="w-2 h-2 bg-white rounded-full"></div>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex-1">
-                            <span className="font-medium text-sm">
-                              {String.fromCharCode(65 + optionIndex)}. {option}
-                            </span>
-                          </div>
-                          {showResult && isCorrect && (
-                            <div className="flex-shrink-0">
-                              <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-200 dark:border-green-600">
-                                Correct
-                              </Badge>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Show explanation after answering or in results */}
-                {(submitted || (learningMode && userAnswers[questionIndex] !== null)) && mcq.explanation && (
-                  <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                    <div className="flex items-start gap-2">
-                      <div className="flex-shrink-0 mt-0.5">
-                        <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      <div>
-                        <p className="font-medium text-blue-800 dark:text-blue-200 text-sm mb-1">Explanation:</p>
-                        <p className="text-blue-700 dark:text-blue-300 text-sm">{mcq.explanation}</p>
-                      </div>
+            {/* Questions Preview */}
+            <div className="space-y-6">
+              {mcqs.map((mcq, index) => (
+                <div key={mcq.id} className="border rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
+                  <div className="flex items-start justify-between mb-3">
+                    <h4 className="text-lg font-medium">
+                      Q{index + 1}: {mcq.question}
+                    </h4>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">{mcq.difficulty}</Badge>
+                      <Badge variant="outline">{mcq.category}</Badge>
                     </div>
                   </div>
-                )}
+
+                  {/* Options Preview */}
+                  <div className="space-y-2 mb-4">
+                    {mcq.options.map((option, optionIndex) => (
+                      <div 
+                        key={optionIndex}
+                        className={`p-3 rounded border ${
+                          optionIndex === mcq.correct 
+                            ? 'border-green-300 bg-green-50 dark:bg-green-900/20' 
+                            : 'border-gray-200 bg-white dark:bg-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                            optionIndex === mcq.correct
+                              ? 'border-green-500 bg-green-500 text-white'
+                              : 'border-gray-300'
+                          }`}>
+                            {optionIndex === mcq.correct && (
+                              <CheckCircle className="w-4 h-4" />
+                            )}
+                          </div>
+                          <span className={optionIndex === mcq.correct ? 'font-medium text-green-700 dark:text-green-300' : ''}>
+                            {option}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Explanation Preview */}
+                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
+                    <h5 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">💡 Explanation:</h5>
+                    <p className="text-blue-800 dark:text-blue-200">{mcq.explanation}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {/* MCQ Test Mode - Show when test is started */}
+        {testStarted && !showResults && (
+          <Card className="p-6">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h3 className="text-lg font-semibold">
+                  Question {currentQuestion + 1} of {mcqs.length}
+                </h3>
+                <div className="flex items-center gap-2 mt-1">
+                  <Badge variant="outline">{company}</Badge>
+                  <Badge variant="outline">{mcqs[currentQuestion]?.difficulty}</Badge>
+                  <Badge variant="outline">{mcqs[currentQuestion]?.category}</Badge>
+                </div>
               </div>
-            ))}
+              
+              <div className="text-right">
+                <div className="text-sm text-muted-foreground">Time Remaining</div>
+                <div className="text-lg font-mono font-bold text-orange-600">
+                  {formatTime(timeLeft)}
+                </div>
+              </div>
+            </div>
+
+            {/* Question */}
+            <div className="mb-6">
+              <h4 className="text-lg font-medium mb-4">
+                {mcqs[currentQuestion]?.question}
+              </h4>
+
+              {/* Options */}
+              <div className="space-y-3">
+                {mcqs[currentQuestion]?.options.map((option, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleAnswer(currentQuestion, index)}
+                    disabled={testCompleted}
+                    className={`w-full p-4 text-left rounded-lg border transition-all ${
+                      selectedAnswer === index
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                    } ${testCompleted ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                        selectedAnswer === index
+                          ? 'border-blue-500 bg-blue-500 text-white'
+                          : 'border-gray-300'
+                      }`}>
+                        {selectedAnswer === index && (
+                          <CheckCircle className="w-4 h-4" />
+                        )}
+                      </div>
+                      <span>{option}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Explanation in test mode (only show if learning mode or after answer) */}
+            {showExplanation && mcqs[currentQuestion]?.explanation && (
+              <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <h5 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">Explanation:</h5>
+                <p className="text-blue-800 dark:text-blue-200">{mcqs[currentQuestion].explanation}</p>
+              </div>
+            )}
+
+            {/* Navigation */}
+            <div className="flex justify-between items-center">
+              <Button
+                onClick={handlePreviousQuestion}
+                disabled={currentQuestion === 0}
+                variant="outline"
+              >
+                Previous
+              </Button>
+
+              <div className="flex gap-2">
+                {selectedAnswer !== null && !showExplanation && (
+                  <Button
+                    onClick={handleShowExplanation}
+                    variant="outline"
+                    className="flex items-center gap-2"
+                  >
+                    <BookOpen className="w-4 h-4" />
+                    Show Explanation
+                  </Button>
+                )}
+
+                <Button
+                  onClick={handleFinishTest}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  Finish Test
+                </Button>
+              </div>
+
+              <Button
+                onClick={handleNextQuestion}
+                disabled={currentQuestion === mcqs.length - 1}
+              >
+                Next
+              </Button>
+            </div>
           </Card>
         )}
 
         {/* Results Section */}
-        {showResult && (
-          <div id="results-section" className="space-y-6">
+        {showResults && (
+          <div className="space-y-6">
             {/* Score Summary */}
-            <Card className="card-glow p-6 bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 border border-green-200 dark:border-green-800">
+            <Card className="p-6 bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 border border-green-200 dark:border-green-800">
               <div className="text-center">
                 <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-green-500 to-blue-500 rounded-full mb-4">
-                  <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
+                  <span className="text-2xl font-bold text-white">{score}%</span>
                 </div>
-                <h2 className="text-2xl font-bold text-green-800 dark:text-green-200 mb-2">Test Completed!</h2>
-                <div className="text-4xl font-bold text-green-600 dark:text-green-400 mb-2">{score}%</div>
+                <h2 className="text-2xl font-bold text-green-900 dark:text-green-100 mb-2">
+                  Test Completed!
+                </h2>
                 <p className="text-green-700 dark:text-green-300">
-                  You scored {userAnswers.filter((answer, i) => answer === mcqs[i]?.correct).length} out of {mcqs.length} questions correctly
+                  You scored {userAnswers.filter((answer, index) => answer === mcqs[index]?.correct).length} out of {mcqs.length} questions correctly
                 </p>
-                <div className="flex justify-center gap-4 mt-4 text-sm text-green-600 dark:text-green-400">
-                  <span>⏱️ Time taken: {formatTime(1800 - timeLeft)}</span>
-                  <span>📊 Accuracy: {score}%</span>
-                  <span>✅ Correct: {userAnswers.filter((answer, i) => answer === mcqs[i]?.correct).length}</span>
-                  <span>❌ Incorrect: {userAnswers.filter((answer, i) => answer !== mcqs[i]?.correct && answer !== null).length}</span>
-                </div>
               </div>
             </Card>
 
-            {/* Performance Breakdown */}
-            <Card className="card-elevated p-6">
-              <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                <svg className="w-5 h-5 text-primary" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z" />
-                  <path d="M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z" />
-                </svg>
-                Performance Breakdown
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {['Easy', 'Medium', 'Hard'].map(difficulty => {
-                  const questionsOfDifficulty = mcqs.filter(q => q.difficulty === difficulty);
-                  const correctOfDifficulty = questionsOfDifficulty.filter((q, i) => {
-                    const originalIndex = mcqs.findIndex(mq => mq.id === q.id);
-                    return userAnswers[originalIndex] === q.correct;
-                  }).length;
-                  const totalOfDifficulty = questionsOfDifficulty.length;
-                  const percentageOfDifficulty = totalOfDifficulty > 0 ? Math.round((correctOfDifficulty / totalOfDifficulty) * 100) : 0;
+            {/* Detailed Statistics */}
+            <Card className="p-6">
+              <h3 className="text-xl font-semibold mb-4">Test Statistics</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <div className="text-2xl font-bold text-green-600">{userAnswers.filter((answer, index) => answer === mcqs[index]?.correct).length}</div>
+                  <div className="text-sm text-green-700 dark:text-green-300">Correct</div>
+                </div>
+                <div className="text-center p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                  <div className="text-2xl font-bold text-red-600">{userAnswers.filter((answer, index) => answer !== null && answer !== mcqs[index]?.correct).length}</div>
+                  <div className="text-sm text-red-700 dark:text-red-300">Incorrect</div>
+                </div>
+                <div className="text-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  <div className="text-2xl font-bold text-gray-600">{userAnswers.filter(answer => answer === null).length}</div>
+                  <div className="text-sm text-gray-700 dark:text-gray-300">Unanswered</div>
+                </div>
+                <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-600">{formatTime(1800 - timeLeft)}</div>
+                  <div className="text-sm text-blue-700 dark:text-blue-300">Time Taken</div>
+                </div>
+              </div>
+
+              {/* Question Review */}
+              <div className="space-y-4">
+                <h4 className="font-semibold">Question Review:</h4>
+                {mcqs.map((mcq, index) => {
+                  const userAnswer = userAnswers[index];
+                  const isCorrect = userAnswer === mcq.correct;
+                  const wasAnswered = userAnswer !== null;
 
                   return (
-                    <div key={difficulty} className="p-4 border rounded-lg">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium">{difficulty}</span>
-                        <Badge variant="outline" className={getDifficultyColor(difficulty)}>
-                          {correctOfDifficulty}/{totalOfDifficulty}
-                        </Badge>
+                    <div key={mcq.id} className={`p-4 rounded-lg border ${
+                      !wasAnswered ? 'border-gray-300 bg-gray-50 dark:bg-gray-800' :
+                      isCorrect ? 'border-green-300 bg-green-50 dark:bg-green-900/20' :
+                      'border-red-300 bg-red-50 dark:bg-red-900/20'
+                    }`}>
+                      <div className="flex items-start justify-between mb-2">
+                        <h5 className="font-medium">Q{index + 1}: {mcq.question}</h5>
+                        <div className="flex items-center gap-2">
+                          {!wasAnswered ? (
+                            <XCircle className="w-5 h-5 text-gray-500" />
+                          ) : isCorrect ? (
+                            <CheckCircle className="w-5 h-5 text-green-500" />
+                          ) : (
+                            <XCircle className="w-5 h-5 text-red-500" />
+                          )}
+                        </div>
                       </div>
-                      <div className="w-full bg-muted rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full ${difficulty === 'Easy' ? 'bg-green-500' :
-                            difficulty === 'Medium' ? 'bg-yellow-500' : 'bg-red-500'
-                            }`}
-                          style={{ width: `${percentageOfDifficulty}%` }}
-                        ></div>
+                      
+                      <div className="text-sm space-y-1">
+                        {!wasAnswered ? (
+                          <p className="text-gray-600 dark:text-gray-400">Not answered</p>
+                        ) : (
+                          <>
+                            <p className={isCorrect ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}>
+                              Your answer: {mcq.options[userAnswer]}
+                            </p>
+                            {!isCorrect && (
+                              <p className="text-green-700 dark:text-green-300">
+                                Correct answer: {mcq.options[mcq.correct]}
+                              </p>
+                            )}
+                          </>
+                        )}
+                        <p className="text-blue-700 dark:text-blue-300 mt-2">
+                          <strong>Explanation:</strong> {mcq.explanation}
+                        </p>
                       </div>
-                      <p className="text-sm text-muted-foreground mt-1">{percentageOfDifficulty}% correct</p>
                     </div>
                   );
                 })}
               </div>
-            </Card>
 
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Button
-                onClick={() => {
-                  setShowResult(false);
-                  setTestStarted(false);
-                  setSubmitted(false);
-                  setUserAnswers(new Array(mcqs.length).fill(null));
-                  setScore(0);
-                  setTimeLeft(1800);
-                  // Reset MCQs to hide explanations
-                  setMcqs(mcqs.map(mcq => ({ ...mcq, showExplanation: false, userAnswer: null })));
-                }}
-                className="btn-hero"
-              >
-                🔄 Retake Test
-              </Button>
-              <Button
-                onClick={() => fetchMCQs()}
-                variant="outline"
-                className="btn-premium"
-              >
-                📝 New Questions
-              </Button>
-              <Button
-                onClick={resetQuiz}
-                variant="outline"
-                className="btn-premium"
-              >
-                🏠 Back to Setup
-              </Button>
-            </div>
+              <div className="flex gap-3 mt-6">
+                <Button onClick={handleReset} className="flex items-center gap-2">
+                  <RotateCcw className="w-4 h-4" />
+                  Take Another Test
+                </Button>
+              </div>
+            </Card>
           </div>
         )}
       </div>

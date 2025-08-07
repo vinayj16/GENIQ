@@ -8,8 +8,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { apiService } from '@/lib/api';
+import { aiService } from '@/lib/blink';
 import { Problem } from '@/types/dashboard';
-import { CheckCircle, Clock, Play, Terminal } from 'lucide-react';
+import { CheckCircle, Clock, Play, Terminal, Lightbulb } from 'lucide-react';
 
 interface TestResult {
   status: 'success' | 'error';
@@ -60,6 +61,7 @@ const EnhancedCoding = () => {
   const [testScore, setTestScore] = useState(0);
   const [problemsCompleted, setProblemsCompleted] = useState(0);
   const [completedProblems, setCompletedProblems] = useState<Set<number>>(new Set());
+  const [hint, setHint] = useState<string>('');
 
   useEffect(() => {
     const loadInitialProblems = async () => {
@@ -169,31 +171,37 @@ const EnhancedCoding = () => {
   }, [userCode, learningMode, selectedProblem]);
 
   const runAIAnalysis = useCallback(async () => {
+    if (!userCode.trim() || !selectedProblem) {
+      toast.error('Please write some code first');
+      return;
+    }
+    
     setLoading(true);
     try {
-      // Simulate AI analysis
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      const mockAnalysis: AIAnalysis = {
-        feedback: 'Your solution is efficient and well-structured. Good use of algorithms.',
-        score: 95,
-        suggestions: [
-          'Consider edge cases like empty inputs.',
-          'Add comments to explain complex logic.',
-          'Could be slightly optimized for memory usage.'
-        ],
-        overallScore: 92,
-        codeQuality: 95,
-        efficiency: 89
+      const analysis = await aiService.analyzeCode(
+        userCode, 
+        language, 
+        selectedProblem.difficulty
+      );
+      
+      const aiAnalysisResult: AIAnalysis = {
+        feedback: analysis.feedback,
+        score: analysis.score,
+        suggestions: analysis.suggestions || [],
+        overallScore: analysis.score,
+        codeQuality: Math.round(analysis.score * 0.9),
+        efficiency: Math.round(analysis.score * 1.1)
       };
-      setAiAnalysis(mockAnalysis);
+      
+      setAiAnalysis(aiAnalysisResult);
       toast.success('AI analysis complete!');
     } catch (error) {
       console.error('Error running AI analysis:', error);
-      toast.error('Failed to run AI analysis');
+      toast.error('Failed to run AI analysis. Please try again.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userCode, language, selectedProblem]);
 
   const handleSubmitAndAnalyze = useCallback(async () => {
     const results = await runCode();
@@ -246,37 +254,66 @@ const EnhancedCoding = () => {
   }, [selectedProblem, userCode, userSolutions, filteredProblems, testStartedMode, runCode, finishTest, handleProblemSelect]);
 
   const analyzeCode = useCallback(async () => {
-    if (!userCode.trim() || !selectedProblem) return;
+    if (!userCode.trim() || !selectedProblem) {
+      toast.error('Please write some code first');
+      return;
+    }
+    
     setLoading(true);
     try {
-      const analysis = await new Promise<AIAnalysis>((resolve) => {
-        setTimeout(() => {
-          resolve({
-            feedback: 'Your code is well-structured but could be optimized further.',
-            score: 85,
-            suggestions: [
-              'Consider adding input validation',
-              'Optimize the time complexity',
-              'Add more comments for better readability'
-            ],
-            overallScore: 85,
-            codeQuality: 8,
-            efficiency: 9,
-          });
-        }, 1000);
-      });
-      setAiAnalysis(analysis);
+      const analysis = await aiService.analyzeCode(
+        userCode, 
+        language, 
+        selectedProblem.difficulty
+      );
+      
+      const aiAnalysisResult: AIAnalysis = {
+        feedback: analysis.feedback,
+        score: analysis.score,
+        suggestions: analysis.suggestions || [],
+        overallScore: analysis.score,
+        codeQuality: Math.round(analysis.score * 0.9),
+        efficiency: Math.round(analysis.score * 1.1)
+      };
+      
+      setAiAnalysis(aiAnalysisResult);
+      toast.success('Code analysis complete!');
     } catch (error) {
       console.error('Error analyzing code:', error);
-      toast.error('Failed to analyze code');
+      toast.error('Failed to analyze code. Please try again.');
     } finally {
       setLoading(false);
     }
   }, [userCode, language, selectedProblem]);
 
+  const generateHint = useCallback(async () => {
+    if (!selectedProblem) {
+      toast.error('Please select a problem first');
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const hintResult = await aiService.generateHint(
+        selectedProblem.title,
+        userCode,
+        language
+      );
+      
+      setHint(hintResult.hint);
+      toast.success('Hint generated!');
+    } catch (error) {
+      console.error('Error generating hint:', error);
+      toast.error('Failed to generate hint. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedProblem, userCode, language]);
+
   const clearResults = useCallback(() => {
     setTestResults(null);
     setAiAnalysis(null);
+    setHint('');
     if (selectedProblem) {
       setUserCode(userSolutions[selectedProblem.id] || selectedProblem.codeTemplate[language as keyof typeof selectedProblem.codeTemplate] || '');
     }
@@ -737,18 +774,26 @@ const EnhancedCoding = () => {
                             <SelectItem value="java">Java</SelectItem>
                           </SelectContent>
                         </Select>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 flex-wrap">
                           {learningMode ? (
-                            <Button onClick={handleSubmitAndAnalyze} disabled={loading} className="w-full md:w-auto bg-primary hover:bg-primary/90 text-primary-foreground">
-                              <Terminal className="mr-2 h-4 w-4" /> Run & Analyze
-                            </Button>
+                            <>
+                              <Button onClick={handleSubmitAndAnalyze} disabled={loading} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                                <Terminal className="mr-2 h-4 w-4" /> Run & Analyze
+                              </Button>
+                              <Button onClick={generateHint} disabled={loading} variant="outline">
+                                <Lightbulb className="mr-2 h-4 w-4" /> Get Hint
+                              </Button>
+                            </>
                           ) : (
-                            <Button onClick={handleSubmit} disabled={loading} className="w-full md:w-auto">
+                            <Button onClick={handleSubmit} disabled={loading}>
                               <CheckCircle className="mr-2 h-4 w-4" /> Submit
                             </Button>
                           )}
-                          <Button onClick={runCode} disabled={loading} variant="outline" className="w-full md:w-auto">
+                          <Button onClick={runCode} disabled={loading} variant="outline">
                             <Play className="mr-2 h-4 w-4" /> Run Tests
+                          </Button>
+                          <Button onClick={analyzeCode} disabled={loading} variant="outline">
+                            <Terminal className="mr-2 h-4 w-4" /> Analyze Code
                           </Button>
                         </div>
                       </div>
@@ -805,6 +850,19 @@ const EnhancedCoding = () => {
                         </div>
                       </div>
                     ))}
+                  </div>
+                </Card>
+              )}
+
+              {/* Hint Display */}
+              {hint && (
+                <Card className="card-elevated p-6">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <Lightbulb className="w-5 h-5 text-yellow-500" />
+                    💡 AI Hint
+                  </h3>
+                  <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                    <p className="text-sm text-yellow-800 dark:text-yellow-200">{hint}</p>
                   </div>
                 </Card>
               )}
