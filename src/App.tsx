@@ -14,6 +14,7 @@ import Contact from "./pages/Contact";
 import NotFound from "./pages/NotFound";
 import DashboardLayout from "./components/DashboardLayout";
 import MainLayout from "./components/MainLayout";
+import ProtectedRoute from "./components/ProtectedRoute";
 import DashboardOverview from "./pages/dashboard/DashboardOverview";
 import Analytics from "./pages/dashboard/Analytics";
 import ResumeBuilder from "./pages/dashboard/ResumeBuilder";
@@ -61,8 +62,14 @@ const App = () => {
               <Route path="/practice/:problemId" element={<EnhancedCodingPractice />} />
             </Route>
             
-            {/* Dashboard routes with DashboardLayout */}
-            <Route element={<DashboardLayout><Outlet /></DashboardLayout>}>
+            {/* Protected Dashboard routes with DashboardLayout */}
+            <Route element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <Outlet />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }>
               <Route path="/dashboard" element={<DashboardOverview />} />
               <Route path="/dashboard/analytics" element={<Analytics />} />
               <Route path="/dashboard/coding" element={<EnhancedCoding />} />

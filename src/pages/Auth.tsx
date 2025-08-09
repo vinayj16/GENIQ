@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import Logo from '@/components/ui/logo';
@@ -18,9 +18,20 @@ const Auth = () => {
     confirmPassword: '' 
   });
 
-  const { login, signup } = useAuth();
+  const { login, signup, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Get the intended destination from location state, default to dashboard
+  const from = location.state?.from || '/dashboard';
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate(from, { replace: true });
+    }
+  }, [isAuthenticated, navigate, from]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,7 +51,7 @@ const Auth = () => {
         title: "Success",
         description: "Welcome back to GENIQ!",
       });
-      navigate('/dashboard');
+      navigate(from, { replace: true });
     } catch (error) {
       toast({
         title: "Error",
@@ -79,7 +90,7 @@ const Auth = () => {
         title: "Success",
         description: "Account created successfully! Welcome to GENIQ!",
       });
-      navigate('/dashboard');
+      navigate(from, { replace: true });
     } catch (error) {
       toast({
         title: "Error",
@@ -141,6 +152,14 @@ const Auth = () => {
                   >
                     {isLoading ? '🔄 Signing In...' : '🚀 Sign In'}
                   </Button>
+                  <Button 
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => setLoginForm({ email: 'demo@geniq.com', password: 'demo123' })}
+                  >
+                    🎯 Use Demo Credentials
+                  </Button>
                 </form>
               </TabsContent>
 
@@ -201,7 +220,14 @@ const Auth = () => {
               </TabsContent>
             </Tabs>
 
-            <div className="mt-6 text-center">
+            <div className="mt-6 text-center space-y-3">
+              <div className="p-3 bg-muted/30 rounded-lg">
+                <p className="text-xs font-medium text-muted-foreground mb-2">Demo Credentials:</p>
+                <div className="text-xs space-y-1">
+                  <p><strong>Email:</strong> demo@geniq.com</p>
+                  <p><strong>Password:</strong> demo123</p>
+                </div>
+              </div>
               <p className="text-sm text-muted-foreground">
                 By continuing, you agree to our Terms of Service and Privacy Policy
               </p>

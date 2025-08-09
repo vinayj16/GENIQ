@@ -28,7 +28,6 @@
     "check:css-classes": "node scripts/check-css-classes.js"
   },
   "dependencies": {
-    "@blinkdotnew/sdk": "^0.17.3",
     "@google/generative-ai": "^0.1.0",
     "@hookform/resolvers": "^3.9.0",
     "@radix-ui/react-accordion": "^1.2.0",

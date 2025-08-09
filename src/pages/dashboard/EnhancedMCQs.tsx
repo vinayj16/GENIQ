@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress";
 import { toast } from 'sonner';
 import { Clock, CheckCircle, XCircle, RotateCcw, Play, BookOpen, Search } from 'lucide-react';
+import { apiService } from '@/lib/api';
 
 interface MCQ {
   id: string | number;
@@ -21,13 +22,104 @@ interface MCQ {
   userAnswer?: number | null;
 }
 
+// Generate mock MCQs to supplement API data
+const generateMockMCQs = (company: string, role: string, category: string, difficulty: string, count: number): MCQ[] => {
+  const mockQuestions = [
+    {
+      question: `What is the time complexity of searching in a hash table for ${company} interviews?`,
+      options: ['O(1) average case', 'O(n) always', 'O(log n) average case', 'O(n²) worst case'],
+      correct: 0,
+      explanation: 'Hash tables provide O(1) average case lookup time due to direct indexing, though worst case can be O(n) with many collisions.',
+      category: 'Data Structures'
+    },
+    {
+      question: `Which design pattern is commonly used in ${company} systems for creating objects?`,
+      options: ['Observer Pattern', 'Factory Pattern', 'Strategy Pattern', 'Decorator Pattern'],
+      correct: 1,
+      explanation: 'Factory Pattern is widely used for object creation, providing flexibility and decoupling object creation from usage.',
+      category: 'System Design'
+    },
+    {
+      question: `In JavaScript, what does 'this' refer to in an arrow function?`,
+      options: ['The global object', 'The calling object', 'The lexical scope', 'Undefined'],
+      correct: 2,
+      explanation: 'Arrow functions inherit "this" from the enclosing lexical scope, unlike regular functions.',
+      category: 'JavaScript'
+    },
+    {
+      question: `What is the space complexity of merge sort algorithm?`,
+      options: ['O(1)', 'O(log n)', 'O(n)', 'O(n log n)'],
+      correct: 2,
+      explanation: 'Merge sort requires O(n) additional space for the temporary arrays used during merging.',
+      category: 'Algorithms'
+    },
+    {
+      question: `Which HTTP status code indicates a successful POST request that created a resource?`,
+      options: ['200 OK', '201 Created', '202 Accepted', '204 No Content'],
+      correct: 1,
+      explanation: '201 Created indicates that the request was successful and a new resource was created.',
+      category: 'Web Development'
+    },
+    {
+      question: `In Python, what is the difference between '==' and 'is'?`,
+      options: ['No difference', '== compares values, is compares identity', 'is compares values, == compares identity', 'Both compare identity'],
+      correct: 1,
+      explanation: '== compares values for equality, while "is" compares object identity (memory location).',
+      category: 'Python'
+    },
+    {
+      question: `What is the primary advantage of using microservices architecture?`,
+      options: ['Faster development', 'Better scalability and maintainability', 'Lower costs', 'Simpler deployment'],
+      correct: 1,
+      explanation: 'Microservices provide better scalability, maintainability, and allow teams to work independently on different services.',
+      category: 'System Design'
+    },
+    {
+      question: `Which data structure is best for implementing a LRU cache?`,
+      options: ['Array', 'Linked List', 'Hash Map + Doubly Linked List', 'Binary Tree'],
+      correct: 2,
+      explanation: 'LRU cache is efficiently implemented using a combination of hash map for O(1) access and doubly linked list for O(1) insertion/deletion.',
+      category: 'Data Structures'
+    },
+    {
+      question: `What is the purpose of the 'virtual' keyword in C++?`,
+      options: ['Memory optimization', 'Enable polymorphism', 'Prevent inheritance', 'Static binding'],
+      correct: 1,
+      explanation: 'The virtual keyword enables runtime polymorphism by allowing derived classes to override base class methods.',
+      category: 'C++'
+    },
+    {
+      question: `In database design, what is normalization?`,
+      options: ['Data encryption', 'Organizing data to reduce redundancy', 'Creating indexes', 'Data backup'],
+      correct: 1,
+      explanation: 'Normalization is the process of organizing database tables to reduce data redundancy and improve data integrity.',
+      category: 'Database'
+    }
+  ];
+
+  const selectedQuestions = mockQuestions.slice(0, count);
+  
+  return selectedQuestions.map((q, index): MCQ => ({
+    id: `mock-${Date.now()}-${index}`,
+    question: q.question,
+    options: q.options,
+    correct: q.correct,
+    explanation: q.explanation,
+    category: category !== 'all' ? category : q.category,
+    difficulty: difficulty !== 'all' ? difficulty : 'Medium',
+    company: company,
+    role: role || 'Software Engineer',
+    userAnswer: null
+  }));
+};
+
 const EnhancedMCQs: React.FC = () => {
   // User input state
   const [company, setCompany] = useState<string>('');
   const [role, setRole] = useState<string>('');
   const [category, setCategory] = useState<string>('all');
   const [difficulty, setDifficulty] = useState<string>('all');
-  const [limit, setLimit] = useState<number>(20);
+  // Fixed limit of 10 questions (handled by backend)
 
   // MCQ state
   const [mcqs, setMcqs] = useState<MCQ[]>([]);
@@ -82,69 +174,43 @@ const EnhancedMCQs: React.FC = () => {
       if (role) params.append('role', role);
       if (category !== 'all') params.append('category', category);
       if (difficulty !== 'all') params.append('difficulty', difficulty);
-      params.append('limit', limit.toString());
+      params.append('limit', '10'); // Fixed limit of 10 questions
 
       console.log('🔍 Fetching MCQs with params:', Object.fromEntries(params));
 
-      // Make API request with authentication - use /api/mcqs for both dev and prod
-      const apiUrl = '/api/mcqs';
-      const apiKey = import.meta.env.VITE_API_KEY || 'prod_geniq_api_key_2024';
-      
-      const response = await fetch(`${apiUrl}?${params.toString()}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': apiKey
-        }
+      // Use API service method with fallback
+      let apiMCQs = await apiService.getMCQs({
+        company: company,
+        category: category !== 'all' ? category : undefined,
+        difficulty: difficulty !== 'all' ? difficulty : undefined,
+        limit: limit
       });
 
-      if (!response.ok) {
-        let errorMessage = `HTTP ${response.status}`;
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.error || errorData.message || errorMessage;
-        } catch (e) {
-          console.error('Error parsing error response:', e);
-        }
-        throw new Error(errorMessage);
-      }
-
-      const apiMCQs = await response.json();
       console.log('✅ Received MCQs from API:', apiMCQs.length, 'questions');
 
-      if (!Array.isArray(apiMCQs) || apiMCQs.length === 0) {
+      // If we don't have enough MCQs, add some mock data to reach 10 questions
+      if (apiMCQs.length < 10) {
+        const mockMCQs = generateMockMCQs(company, role, category, difficulty, 10 - apiMCQs.length);
+        apiMCQs = [...apiMCQs, ...mockMCQs];
+        console.log('✅ Added mock MCQs, total:', apiMCQs.length, 'questions');
+      }
+
+      if (apiMCQs.length === 0) {
         toast.warning('No MCQs found for your criteria. Try different filters.');
         setMcqs([]);
         return;
       }
 
-      // Transform API response with type safety
-      const transformedMCQs: MCQ[] = apiMCQs.map((mcq: any, index: number) => {
-        // Ensure we have valid options and correct answer
-        const options = Array.isArray(mcq.options) ? mcq.options : [];
-        const correctAnswer = typeof mcq.correct === 'number' && 
-                            mcq.correct >= 0 && 
-                            mcq.correct < options.length 
-                   ? mcq.correct 
-                            : 0;
-                            
-        return {
-          id: mcq.id || `mcq-${index + 1}`,
-          question: mcq.question || 'Question not available',
-          options: options,
-          correct: correctAnswer,
-          explanation: mcq.explanation || 'No explanation provided',
-          category: mcq.category || 'General',
-          difficulty: mcq.difficulty || difficulty || 'Medium',
-          company: mcq.company || company,
-          role: mcq.role || role || 'Software Engineer',
-          userAnswer: null
-        };
-      });
+      // API service already returns properly formatted MCQ objects
+      // Just ensure userAnswer is set to null for all questions
+      const finalMCQs: MCQ[] = apiMCQs.map(mcq => ({
+        ...mcq,
+        userAnswer: null
+      }));
 
       // Set MCQs and reset test state
-      setMcqs(transformedMCQs);
-      setUserAnswers(new Array(transformedMCQs.length).fill(null));
+      setMcqs(finalMCQs);
+      setUserAnswers(new Array(finalMCQs.length).fill(null));
       setCurrentQuestion(0);
       setSelectedAnswer(null);
       setShowExplanation(false);
@@ -153,7 +219,7 @@ const EnhancedMCQs: React.FC = () => {
       setShowResults(false);
       setScore(0);
 
-      toast.success(`🎉 Loaded ${transformedMCQs.length} MCQs for ${company}! Ready to start test.`);
+      toast.success(`🎉 Loaded ${finalMCQs.length} MCQs for ${company}! Ready to start test.`);
     } catch (error: any) {
       console.error('❌ Failed to fetch MCQs:', error);
       toast.error(`Failed to fetch MCQs: ${error.message}`);
@@ -292,7 +358,6 @@ const EnhancedMCQs: React.FC = () => {
     setRole('');
     setCategory('all');
     setDifficulty('all');
-    setLimit(20);
 
     toast.info('Reset complete. Ready for new MCQs!');
   };
@@ -344,7 +409,7 @@ const EnhancedMCQs: React.FC = () => {
               <h2 className="text-xl font-semibold">Configure Your Test</h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               <div>
                 <label className="block text-sm font-medium mb-2">Company Name *</label>
                 <Input
@@ -355,7 +420,7 @@ const EnhancedMCQs: React.FC = () => {
                 />
               </div>
               
-              <div>sis = await .analyzeMCQPerformance(analysisData);
+              <div>
                 <label className="block text-sm font-medium mb-2">Role</label>
                 <Input
                   placeholder="e.g., Software Engineer"
@@ -398,20 +463,7 @@ const EnhancedMCQs: React.FC = () => {
                 </Select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-2">Number of Questions</label>
-                <Select value={limit.toString()} onValueChange={(value) => setLimit(parseInt(value))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="5">5 Questions</SelectItem>
-                    <SelectItem value="10">10 Questions</SelectItem>
-                    <SelectItem value="15">15 Questions</SelectItem>
-                    <SelectItem value="20">20 Questions</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+
             </div>
 
             <div className="flex gap-3">

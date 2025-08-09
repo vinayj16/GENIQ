@@ -94,6 +94,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     setUser(null);
     localStorage.removeItem('geniq_user');
+    // Redirect to home page after logout
+    window.location.href = '/';
   };
 
   const updateProfile = async (data: Partial<User>) => {
